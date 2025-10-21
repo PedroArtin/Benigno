@@ -3,27 +3,34 @@
     "name": "benigno",
     "slug": "benigno",
     "version": "1.0.0",
+    "scheme": "benigno",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon1.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash1.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": true
+      "backgroundColor": "#5f713f"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon1.png",
+        "backgroundColor": "#5f713f"
+        
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.wecharity.benigno"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "07a970d0-2a69-4741-9675-86a127e9cc9e"
+      }
     }
   }
 }
