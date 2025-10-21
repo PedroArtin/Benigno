@@ -8,16 +8,22 @@ import {
   ActivityIndicator,
   FlatList,
   TextInput,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout } from 'react-native-maps';
-import * as Location from 'expo-location';
-import FilterModal from '../components/FilterModal';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../components/Global';
 import { buscarProjetosAtivos } from '../services/projetosService';
 import { useFavoritos } from '../hooks/useFavoritos';
 import BotaoFavoritar from '../components/BotaoFavoritar';
+
+let MapView, Marker, Callout;
+if (Platform.OS !== 'web') {
+  ({ default: MapView, Marker, Callout } = require('react-native-maps'));
+} else {
+  MapView = ({ style }) => <View style={style}><Text>Mapas não disponíveis na web</Text></View>;
+  Marker = Callout = () => null;
+}
 
 export default function Doar({ navigation }) {
   const [showFilters, setShowFilters] = useState(false);
