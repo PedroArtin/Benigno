@@ -1,6 +1,6 @@
 // services/avaliacoesService.js
 import { db } from '../firebase/firebaseconfig';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, getDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, updateDoc, doc, getDoc, increment, Timestamp } from 'firebase/firestore';
 
 /**
  * Salvar avaliação de uma ONG
@@ -11,7 +11,7 @@ export const salvarAvaliacao = async (dados) => {
     
     const docRef = await addDoc(avaliacoesRef, {
       ...dados,
-      dataCriacao: new Date().toISOString(),
+      dataCriacao: Timestamp.now(),
     });
 
     // Atualizar média de avaliações da instituição
