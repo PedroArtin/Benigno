@@ -226,7 +226,7 @@ export const confirmarRecebimento = async (doacaoId) => {
   try {
     const doacaoRef = doc(db, 'doacoes', doacaoId);
     
-    // Buscar dados da doação para obter projetoId
+    // Buscar dados da doação para obter projetoId e instituicaoId
     const doacaoSnap = await getDoc(doacaoRef);
     if (!doacaoSnap.exists()) {
       throw new Error('Doação não encontrada');
@@ -234,6 +234,7 @@ export const confirmarRecebimento = async (doacaoId) => {
     
     const doacao = doacaoSnap.data();
     const projetoId = doacao.projetoId;
+    const instituicaoId = doacao.instituicaoId;
     
     // Atualizar status da doação
     await updateDoc(doacaoRef, {
@@ -249,6 +250,15 @@ export const confirmarRecebimento = async (doacaoId) => {
         doacoesRecebidas: increment(1),
       });
       console.log('✅ doacoesRecebidas incrementada no projeto:', projetoId);
+    }
+    
+    // 🎯 INCREMENTAR PONTOS DA INSTITUIÇÃO (+10 PONTOS POR DOAÇÃO RECEBIDA)
+    if (instituicaoId) {
+      const instRef = doc(db, 'instituicoes', instituicaoId);
+      await updateDoc(instRef, {
+        pontos: increment(10),
+      });
+      console.log('✅ +10 pontos adicionados à instituição:', instituicaoId);
     }
     
     console.log('✅ Doação confirmada como recebida');

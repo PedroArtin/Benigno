@@ -9,11 +9,13 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../components/Global';
 import { salvarDoacao } from '../services/doacoesService';
 import { incrementarDoacoes } from '../authService';
+import { salvarAvaliacao } from '../services/avaliacoesService';
 import { auth } from '../firebase/firebaseconfig';
 
 export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
@@ -21,6 +23,10 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
   const [itens, setItens] = useState([{ categoria: '', quantidade: '', descricao: '' }]);
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [modalAvaliacao, setModalAvaliacao] = useState(false);
+  const [estrelasSelecionadas, setEstrelasSelecionadas] = useState(0);
+  const [comentario, setComentario] = useState('');
+  const [doacaoId, setDoacaoId] = useState(null);
 
   const categorias = [
     { value: 'alimentos', label: 'Alimentos' },
@@ -118,23 +124,12 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
           console.log('✅ Pontos adicionados: +10 pontos!');
         } catch (error) {
           console.error('⚠️ Erro ao adicionar pontos:', error);
-          // Não falha a doação se os pontos não forem adicionados
         }
 
-        Alert.alert(
-          'Sucesso! 🎉',
-          tipoEntrega === 'entrega'
-            ? 'Sua doação foi registrada! Leve os itens até a instituição para confirmação.'
-            : 'Sua doação foi registrada! A instituição entrará em contato para agendar a coleta.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (onSuccess) onSuccess();
-              },
-            },
-          ]
-        );
+        // Guardar ID da doação para avaliação
+        setDoacaoId(resultado.id || resultado.doacaoId);
+        // Mostrar modal de avaliação
+        setModalAvaliacao(true);
       } else {
         Alert.alert('Erro', 'Não foi possível registrar a doação. Tente novamente.');
       }
@@ -146,8 +141,130 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
     }
   };
 
+  const handleSalvarAvaliacao = async () => {
+    if (estrelasSelecionadas === 0) {
+      Alert.alert('Avaliação', 'Por favor, selecione uma classificação');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const user = auth.currentUser;
+
+      await salvarAvaliacao({
+        doacaoId: doacaoId,
+        doadorId: user.uid,
+        instituicaoId: projeto.instituicaoId,
+        projetoId: projeto.id,
+        estrelas: estrelasSelecionadas,
+        comentario: comentario.trim(),
+      });
+
+      setModalAvaliacao(false);
+      Alert.alert(
+        'Sucesso! 🎉',
+        'Sua doação foi registrada e sua avaliação foi salva!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Resetar form
+              setEstrelasSelecionadas(0);
+              setComentario('');
+              if (onSuccess) onSuccess();
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Erro ao salvar avaliação:', error);
+      Alert.alert('Erro', 'Não foi possível salvar sua avaliação');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <>
+      {/* Modal de Avaliação */}
+      <Modal
+        visible={modalAvaliacao}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalAvaliacao(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Avalie a Instituição</Text>
+              <TouchableOpacity onPress={() => setModalAvaliacao(false)}>
+                <Ionicons name="close" size={28} color={cores.verdeEscuro} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.avaliacaoContainer}>
+                <Text style={styles.avaliacaoLabel}>Como foi sua experiência?</Text>
+                
+                {/* Estrelas */}
+                <View style={styles.estrelasContainer}>
+                  {[1, 2, 3, 4, 5].map((estrela) => (
+                    <TouchableOpacity
+                      key={estrela}
+                      onPress={() => setEstrelasSelecionadas(estrela)}
+                    >
+                      <Ionicons
+                        name={estrela <= estrelasSelecionadas ? 'star' : 'star-outline'}
+                        size={48}
+                        color={estrela <= estrelasSelecionadas ? '#F9A825' : '#DDD'}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.estrelaTexto}>
+                  {estrelasSelecionadas === 0
+                    ? 'Selecione uma classificação'
+                    : `${estrelasSelecionadas} estrela${estrelasSelecionadas !== 1 ? 's' : ''}`}
+                </Text>
+
+                {/* Comentário */}
+                <Text style={styles.comentarioLabel}>Deixe um comentário (opcional)</Text>
+                <TextInput
+                  style={styles.comentarioInput}
+                  placeholder="Conte-nos sua experiência..."
+                  placeholderTextColor="#CCC"
+                  value={comentario}
+                  onChangeText={setComentario}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.btnCancelar}
+                onPress={() => setModalAvaliacao(false)}
+              >
+                <Text style={styles.btnCancelarText}>Pular</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnSalvar}
+                onPress={handleSalvarAvaliacao}
+                disabled={loading}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.btnSalvarText}>
+                  {loading ? 'Salvando...' : 'Enviar Avaliação'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Tipo de Entrega */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Como deseja doar?</Text>
@@ -320,6 +437,7 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </>
   );
 }
 
@@ -495,6 +613,116 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitBtnText: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#fff',
+  },
+});
+
+const modalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: cores.brancoTexto,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: {
+    ...fontes.merriweatherBold,
+    fontSize: 20,
+    color: cores.verdeEscuro,
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  avaliacaoContainer: {
+    alignItems: 'center',
+  },
+  avaliacaoLabel: {
+    ...fontes.merriweatherBold,
+    fontSize: 18,
+    color: '#333',
+    marginBottom: 24,
+  },
+  estrelasContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginBottom: 16,
+  },
+  estrelaTexto: {
+    ...fontes.montserrat,
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 24,
+  },
+  comentarioLabel: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#333',
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  comentarioInput: {
+    ...fontes.montserrat,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    textAlignVertical: 'top',
+    minHeight: 100,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  btnCancelar: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: cores.laranjaEscuro,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnCancelarText: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: cores.laranjaEscuro,
+  },
+  btnSalvar: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: cores.verdeEscuro,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  btnSalvarText: {
     ...fontes.montserratBold,
     fontSize: 14,
     color: '#fff',

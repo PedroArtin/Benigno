@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
+import NavbarDashboard from '../../components/navbarDashboard';
 import { auth, db } from '../../firebase/firebaseconfig';
 import { doc, getDoc } from 'firebase/firestore';
 import * as projetosService from '../../services/projetosService';
@@ -89,6 +90,7 @@ export default function DashboardInstituicao({ navigation }) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <NavbarDashboard navigation={navigation} instituicao={instituicao} />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Carregando...</Text>
         </View>
@@ -98,6 +100,7 @@ export default function DashboardInstituicao({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NavbarDashboard navigation={navigation} instituicao={instituicao} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -196,7 +199,7 @@ export default function DashboardInstituicao({ navigation }) {
 
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => navigation.navigate('EstatisticasInst')}
+              onPress={() => navigation.navigate('EstatisticasInstituicao')}
             >
               <View style={[styles.actionIcon, { backgroundColor: '#F3E5F5' }]}>
                 <Ionicons name="bar-chart" size={32} color="#7B1FA2" />

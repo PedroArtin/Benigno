@@ -1,4 +1,4 @@
-// screens/instituicao/DoacoesRecebidas.js
+// screens/instituicao/EstatisticasInstituicao.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -7,33 +7,89 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
-import { auth } from '../../firebase/firebaseconfig';
-import * as projetosService from '../../services/projetosService';
+import NavbarDashboard from '../../components/navbarDashboard';
+import { auth, db } from '../../firebase/firebaseconfig';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
-export default function DoacoesRecebidas() {
-  const [doacoes, setDoacoes] = useState([]);
+const { width } = Dimensions.get('window');
+
+export default function EstatisticasInstituicao({ navigation }) {
+  const [stats, setStats] = useState({
+    totalProjetos: 0,
+    projetosAtivos: 0,
+    totalDoacoes: 0,
+    doacoesPorMes: {},
+    doacoesPorStatus: { pendente: 0, confirmada: 0, entregue: 0 },
+    totalArrecadado: 0,
+    mediaDocoesProj: 0,
+    pontuacao: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filtro, setFiltro] = useState('todas'); // todas, pendentes, confirmadas, entregues
+  const [graficoSelecionado, setGraficoSelecionado] = useState('doacoes');
 
   useEffect(() => {
-    carregarDoacoes();
+    carregarEstatisticas();
   }, []);
 
-  const carregarDoacoes = async () => {
+  const carregarEstatisticas = async () => {
     try {
       const user = auth.currentUser;
       if (!user) return;
 
-      const doacoesData = await projetosService.buscarDoacoesInstituicao(user.uid);
-      setDoacoes(doacoesData);
+      // Carregar dados da instituição (pontuação)
+      const instRef = doc(db, 'instituicoes', user.uid);
+      const instSnap = await getDoc(instRef);
+      let pontuacao = 0;
+      
+      if (instSnap.exists()) {
+        const instData = instSnap.data();
+        pontuacao = instData.pontos || instData.pontuacao || 0;
+      }
+
+      // Carregar projetos
+      const projetosRef = collection(db, 'projetos');
+      const projetosQuery = query(projetosRef, where('instituicaoId', '==', user.uid));
+      const projetosSnap = await getDocs(projetosQuery);
+      const projetos = projetosSnap.docs.map((d) => d.data());
+      const projetosAtivos = projetos.filter((p) => p.ativo).length;
+
+      // Carregar doações
+      const doacoesRef = collection(db, 'doacoes');
+      const doacoesQuery = query(doacoesRef, where('instituicaoId', '==', user.uid));
+      const doacoesSnap = await getDocs(doacoesQuery);
+      const doacoes = doacoesSnap.docs.map((d) => d.data());
+
+      // Processar estatísticas
+      const doacoesPorStatus = { pendente: 0, confirmada: 0, entregue: 0 };
+      const doacoesPorMes = {};
+
+      doacoes.forEach((d) => {
+        doacoesPorStatus[d.status] = (doacoesPorStatus[d.status] || 0) + 1;
+
+        if (d.dataDoacao) {
+          const data = d.dataDoacao.toDate ? d.dataDoacao.toDate() : new Date(d.dataDoacao);
+          const mes = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+          doacoesPorMes[mes] = (doacoesPorMes[mes] || 0) + 1;
+        }
+      });
+
+      setStats({
+        totalProjetos: projetos.length,
+        projetosAtivos: projetosAtivos,
+        totalDoacoes: doacoes.length,
+        doacoesPorMes,
+        doacoesPorStatus,
+        mediaDocoesProj: projetos.length > 0 ? Math.round(doacoes.length / projetos.length) : 0,
+        pontuacao: pontuacao,
+      });
     } catch (error) {
-      console.error('Erro ao carregar doações:', error);
+      console.error('Erro ao carregar estatísticas:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -42,69 +98,15 @@ export default function DoacoesRecebidas() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    carregarDoacoes();
-  };
-
-  const handleConfirmar = async (doacaoId) => {
-    Alert.alert('Confirmar Entrega', 'Marcar esta doação como entregue?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Confirmar',
-        onPress: async () => {
-          try {
-            await projetosService.atualizarStatusDoacao(doacaoId, 'entregue');
-            Alert.alert('Sucesso', 'Doação confirmada!');
-            carregarDoacoes();
-          } catch (error) {
-            Alert.alert('Erro', 'Não foi possível confirmar');
-          }
-        },
-      },
-    ]);
-  };
-
-  const doacoesFiltradas = doacoes.filter((d) => {
-    if (filtro === 'pendentes') return d.status === 'pendente';
-    if (filtro === 'confirmadas') return d.status === 'confirmado';
-    if (filtro === 'entregues') return d.status === 'entregue';
-    return true;
-  });
-
-  const getStatusColor = (status) => {
-    const colors = {
-      pendente: cores.laranjaEscuro,
-      confirmado: '#1976D2',
-      entregue: cores.verdeEscuro,
-      cancelado: '#E53935',
-    };
-    return colors[status] || '#999';
-  };
-
-  const getStatusIcon = (status) => {
-    const icons = {
-      pendente: 'time',
-      confirmado: 'checkmark-circle',
-      entregue: 'checkmark-done-circle',
-      cancelado: 'close-circle',
-    };
-    return icons[status] || 'help-circle';
-  };
-
-  const getStatusText = (status) => {
-    const texts = {
-      pendente: 'Aguardando',
-      confirmado: 'Confirmado',
-      entregue: 'Entregue',
-      cancelado: 'Cancelado',
-    };
-    return texts[status] || status;
+    carregarEstatisticas();
   };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <NavbarDashboard navigation={navigation} instituicao={null} />
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Carregando...</Text>
+          <Text style={styles.loadingText}>Carregando estatísticas...</Text>
         </View>
       </SafeAreaView>
     );
@@ -112,150 +114,300 @@ export default function DoacoesRecebidas() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Doações</Text>
-          <Text style={styles.headerSubtitle}>{doacoesFiltradas.length} recebida(s)</Text>
-        </View>
-      </View>
+      <NavbarDashboard navigation={navigation} instituicao={null} />
 
-      {/* Filtros */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtrosScroll}
-        contentContainerStyle={styles.filtrosContainer}
-      >
-        <TouchableOpacity
-          style={[styles.filtroBtn, filtro === 'todas' && styles.filtroAtivo]}
-          onPress={() => setFiltro('todas')}
-        >
-          <Text style={[styles.filtroText, filtro === 'todas' && styles.filtroTextoAtivo]}>
-            Todas ({doacoes.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filtroBtn, filtro === 'pendentes' && styles.filtroAtivo]}
-          onPress={() => setFiltro('pendentes')}
-        >
-          <Text style={[styles.filtroText, filtro === 'pendentes' && styles.filtroTextoAtivo]}>
-            Pendentes ({doacoes.filter((d) => d.status === 'pendente').length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filtroBtn, filtro === 'entregues' && styles.filtroAtivo]}
-          onPress={() => setFiltro('entregues')}
-        >
-          <Text style={[styles.filtroText, filtro === 'entregues' && styles.filtroTextoAtivo]}>
-            Entregues ({doacoes.filter((d) => d.status === 'entregue').length})
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Lista de Doações */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.scrollContent}
       >
-        {doacoesFiltradas.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="gift-outline" size={80} color={cores.placeholder} />
-            <Text style={styles.emptyTitle}>Nenhuma doação encontrada</Text>
-            <Text style={styles.emptyText}>
-              {filtro === 'todas'
-                ? 'Você ainda não recebeu doações'
-                : `Não há doações ${filtro}`}
-            </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Estatísticas</Text>
+          <Text style={styles.headerSubtitle}>Acompanhe seu desempenho</Text>
+        </View>
+
+        {/* Cards de Resumo */}
+        <View style={styles.resumoGrid}>
+          <View style={styles.resumoCard}>
+            <View style={[styles.resumoIcon, { backgroundColor: cores.verdeClaro }]}>
+              <Ionicons name="folder" size={28} color={cores.verdeEscuro} />
+            </View>
+            <Text style={styles.resumoValue}>{stats.totalProjetos}</Text>
+            <Text style={styles.resumoLabel}>Total de Projetos</Text>
           </View>
-        ) : (
-          doacoesFiltradas.map((doacao) => (
-            <View key={doacao.id} style={styles.doacaoCard}>
-              {/* Header */}
-              <View style={styles.cardHeader}>
-                <View style={styles.doadorInfo}>
-                  <View
-                    style={[
-                      styles.avatarCircle,
-                      { backgroundColor: getStatusColor(doacao.status) + '20' },
-                    ]}
-                  >
-                    <Ionicons
-                      name="person"
-                      size={24}
-                      color={getStatusColor(doacao.status)}
-                    />
+
+          <View style={styles.resumoCard}>
+            <View style={[styles.resumoIcon, { backgroundColor: '#E8F5E9' }]}>
+              <Ionicons name="checkmark-circle" size={28} color={cores.verdeEscuro} />
+            </View>
+            <Text style={styles.resumoValue}>{stats.projetosAtivos}</Text>
+            <Text style={styles.resumoLabel}>Projetos Ativos</Text>
+          </View>
+
+          <View style={styles.resumoCard}>
+            <View style={[styles.resumoIcon, { backgroundColor: cores.laranjaClaro }]}>
+              <Ionicons name="gift" size={28} color={cores.laranjaEscuro} />
+            </View>
+            <Text style={styles.resumoValue}>{stats.totalDoacoes}</Text>
+            <Text style={styles.resumoLabel}>Total de Doações</Text>
+          </View>
+
+          <View style={styles.resumoCard}>
+            <View style={[styles.resumoIcon, { backgroundColor: '#F3E5F5' }]}>
+              <Ionicons name="stats-chart" size={28} color="#7B1FA2" />
+            </View>
+            <Text style={styles.resumoValue}>{stats.mediaDocoesProj}</Text>
+            <Text style={styles.resumoLabel}>Doações/Projeto</Text>
+          </View>
+
+          <View style={styles.resumoCard}>
+            <View style={[styles.resumoIcon, { backgroundColor: '#FFF9C4' }]}>
+              <Ionicons name="star" size={28} color="#F9A825" />
+            </View>
+            <Text style={styles.resumoValue}>{stats.pontuacao}</Text>
+            <Text style={styles.resumoLabel}>Pontuação</Text>
+          </View>
+        </View>
+
+        {/* Menu de Gráficos */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.menuGraficosContainer}
+          style={styles.menuGraficosScroll}
+        >
+          <TouchableOpacity
+            style={[styles.btnGrafico, graficoSelecionado === 'doacoes' && styles.btnAtivo]}
+            onPress={() => setGraficoSelecionado('doacoes')}
+          >
+            <Ionicons
+              name="bar-chart"
+              size={20}
+              color={graficoSelecionado === 'doacoes' ? '#fff' : cores.verdeEscuro}
+            />
+            <Text
+              style={[
+                styles.btnGraficoText,
+                graficoSelecionado === 'doacoes' && styles.btnGraficoTextAtivo,
+              ]}
+            >
+              Doações
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.btnGrafico, graficoSelecionado === 'status' && styles.btnAtivo]}
+            onPress={() => setGraficoSelecionado('status')}
+          >
+            <Ionicons
+              name="pie-chart"
+              size={20}
+              color={graficoSelecionado === 'status' ? '#fff' : cores.verdeEscuro}
+            />
+            <Text
+              style={[
+                styles.btnGraficoText,
+                graficoSelecionado === 'status' && styles.btnGraficoTextAtivo,
+              ]}
+            >
+              Status
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.btnGrafico, graficoSelecionado === 'projetos' && styles.btnAtivo]}
+            onPress={() => setGraficoSelecionado('projetos')}
+          >
+            <Ionicons
+              name="folder-open"
+              size={20}
+              color={graficoSelecionado === 'projetos' ? '#fff' : cores.verdeEscuro}
+            />
+            <Text
+              style={[
+                styles.btnGraficoText,
+                graficoSelecionado === 'projetos' && styles.btnGraficoTextAtivo,
+              ]}
+            >
+              Projetos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.btnGrafico, graficoSelecionado === 'pontuacao' && styles.btnAtivo]}
+            onPress={() => setGraficoSelecionado('pontuacao')}
+          >
+            <Ionicons
+              name="star"
+              size={20}
+              color={graficoSelecionado === 'pontuacao' ? '#fff' : cores.verdeEscuro}
+            />
+            <Text
+              style={[
+                styles.btnGraficoText,
+                graficoSelecionado === 'pontuacao' && styles.btnGraficoTextAtivo,
+              ]}
+            >
+              Pontuação
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Gráfico de Doações por Mês */}
+        {graficoSelecionado === 'doacoes' && (
+          <View style={styles.graficoContainer}>
+            <Text style={styles.graficoTitle}>Doações por Mês</Text>
+            <View style={styles.graficoContent}>
+              {Object.entries(stats.doacoesPorMes)
+                .sort()
+                .reverse()
+                .slice(0, 6)
+                .map(([mes, count]) => (
+                  <View key={mes} style={styles.barraItem}>
+                    <View style={styles.barraLabel}>
+                      <Text style={styles.barraLabelText}>{mes}</Text>
+                    </View>
+                    <View style={styles.barraContainer}>
+                      <View
+                        style={[
+                          styles.barra,
+                          {
+                            width: `${(count / Math.max(...Object.values(stats.doacoesPorMes), 1)) * 100}%`,
+                            backgroundColor: cores.verdeEscuro,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.barraValue}>{count}</Text>
                   </View>
-                  <View style={styles.doadorTexts}>
-                    <Text style={styles.doadorNome}>{doacao.doadorNome}</Text>
-                    <Text style={styles.doadorContato}>{doacao.doadorTelefone}</Text>
-                  </View>
-                </View>
+                ))}
+            </View>
+          </View>
+        )}
+
+        {/* Gráfico de Status */}
+        {graficoSelecionado === 'status' && (
+          <View style={styles.graficoContainer}>
+            <Text style={styles.graficoTitle}>Doações por Status</Text>
+            <View style={styles.statusGrid}>
+              <View style={styles.statusItem}>
                 <View
                   style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(doacao.status) + '20' },
+                    styles.statusCircle,
+                    { backgroundColor: cores.laranjaEscuro },
                   ]}
                 >
-                  <Ionicons
-                    name={getStatusIcon(doacao.status)}
-                    size={14}
-                    color={getStatusColor(doacao.status)}
-                  />
-                  <Text
-                    style={[styles.statusText, { color: getStatusColor(doacao.status) }]}
-                  >
-                    {getStatusText(doacao.status)}
+                  <Text style={styles.statusNumber}>
+                    {stats.doacoesPorStatus.pendente}
                   </Text>
                 </View>
+                <Text style={styles.statusName}>Pendente</Text>
               </View>
 
-              {/* Itens */}
-              <View style={styles.itemsContainer}>
-                <Ionicons name="gift" size={18} color={cores.laranjaEscuro} />
-                <Text style={styles.itemsText}>{doacao.items}</Text>
+              <View style={styles.statusItem}>
+                <View
+                  style={[
+                    styles.statusCircle,
+                    { backgroundColor: '#1976D2' },
+                  ]}
+                >
+                  <Text style={styles.statusNumber}>
+                    {stats.doacoesPorStatus.confirmada}
+                  </Text>
+                </View>
+                <Text style={styles.statusName}>Confirmada</Text>
               </View>
 
-              {/* Modalidade */}
-              <View style={styles.modalidadeContainer}>
-                <Ionicons
-                  name={doacao.modalidade === 'retirar' ? 'home' : 'car'}
-                  size={18}
-                  color={cores.verdeEscuro}
-                />
-                <Text style={styles.modalidadeText}>
-                  {doacao.modalidade === 'retirar'
-                    ? 'Retirar no endereço do doador'
-                    : 'Doador irá entregar'}
+              <View style={styles.statusItem}>
+                <View
+                  style={[
+                    styles.statusCircle,
+                    { backgroundColor: cores.verdeEscuro },
+                  ]}
+                >
+                  <Text style={styles.statusNumber}>
+                    {stats.doacoesPorStatus.entregue}
+                  </Text>
+                </View>
+                <Text style={styles.statusName}>Entregue</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Gráfico de Projetos */}
+        {graficoSelecionado === 'projetos' && (
+          <View style={styles.graficoContainer}>
+            <Text style={styles.graficoTitle}>Desempenho de Projetos</Text>
+            <View style={styles.projetosStats}>
+              <View style={styles.projetoItem}>
+                <View style={styles.projetoCircle}>
+                  <Text style={styles.projetoPercent}>
+                    {stats.totalProjetos > 0
+                      ? Math.round((stats.projetosAtivos / stats.totalProjetos) * 100)
+                      : 0}
+                    %
+                  </Text>
+                </View>
+                <Text style={styles.projetoLabel}>Taxa de Atividade</Text>
+                <Text style={styles.projetoDesc}>
+                  {stats.projetosAtivos} de {stats.totalProjetos} projetos
                 </Text>
               </View>
 
-              {/* Endereço (se disponível) */}
-              {doacao.endereco && (
-                <View style={styles.enderecoContainer}>
-                  <Ionicons name="location" size={18} color={cores.placeholder} />
-                  <Text style={styles.enderecoText} numberOfLines={2}>
-                    {doacao.endereco}
+              <View style={styles.projetoItem}>
+                <View style={[styles.projetoCircle, { backgroundColor: cores.laranjaClaro }]}>
+                  <Text style={[styles.projetoPercent, { color: cores.laranjaEscuro }]}>
+                    {stats.mediaDocoesProj}
                   </Text>
                 </View>
-              )}
-
-              {/* Botão de Ação */}
-              {doacao.status === 'pendente' && (
-                <TouchableOpacity
-                  style={styles.confirmarBtn}
-                  onPress={() => handleConfirmar(doacao.id)}
-                >
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <Text style={styles.confirmarBtnText}>Confirmar Entrega</Text>
-                </TouchableOpacity>
-              )}
+                <Text style={styles.projetoLabel}>Média de Doações</Text>
+                <Text style={styles.projetoDesc}>Por projeto</Text>
+              </View>
             </View>
-          ))
+          </View>
         )}
 
-        <View style={{ height: 80 }} />
+        {/* Gráfico de Pontuação */}
+        {graficoSelecionado === 'pontuacao' && (
+          <View style={styles.graficoContainer}>
+            <Text style={styles.graficoTitle}>Pontuação da ONG</Text>
+            <View style={styles.pontuacaoContent}>
+              <View style={styles.pontuacaoCircle}>
+                <Text style={styles.pontuacaoValue}>{stats.pontuacao}</Text>
+                <Text style={styles.pontuacaoLabel}>Pontos Totais</Text>
+              </View>
+              <View style={styles.pontuacaoInfo}>
+                <View style={styles.infoBadge}>
+                  <Ionicons name="star" size={24} color="#F9A825" />
+                  <View>
+                    <Text style={styles.infoLabel}>Ranking de Confiabilidade</Text>
+                    <Text style={styles.infoValue}>
+                      {stats.pontuacao > 500 ? 'Ouro' : stats.pontuacao > 250 ? 'Prata' : 'Bronze'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.infoBadge}>
+                  <Ionicons name="gift" size={24} color={cores.laranjaEscuro} />
+                  <View>
+                    <Text style={styles.infoLabel}>Doações Confirmadas</Text>
+                    <Text style={styles.infoValue}>{stats.doacoesPorStatus.entregue}</Text>
+                  </View>
+                </View>
+                <View style={styles.infoBadge}>
+                  <Ionicons name="folder" size={24} color={cores.verdeEscuro} />
+                  <View>
+                    <Text style={styles.infoLabel}>Projetos Ativos</Text>
+                    <Text style={styles.infoValue}>{stats.projetosAtivos}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -266,6 +418,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: cores.fundoBranco,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -274,6 +429,7 @@ const styles = StyleSheet.create({
   loadingText: {
     ...fontes.montserrat,
     fontSize: 16,
+    color: '#666',
   },
   header: {
     paddingHorizontal: 20,
@@ -283,169 +439,250 @@ const styles = StyleSheet.create({
     ...fontes.merriweatherBold,
     fontSize: 28,
     color: cores.verdeEscuro,
+    marginBottom: 4,
   },
   headerSubtitle: {
     ...fontes.montserrat,
     fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+    color: '#999',
   },
-  filtrosScroll: {
-    maxHeight: 50,
-  },
-  filtrosContainer: {
+  resumoGrid: {
     paddingHorizontal: 20,
-    paddingBottom: 15,
-    gap: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 30,
   },
-  filtroBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-    marginRight: 10,
-  },
-  filtroAtivo: {
-    backgroundColor: cores.verdeEscuro,
-  },
-  filtroText: {
-    ...fontes.montserratMedium,
-    fontSize: 13,
-    color: '#666',
-  },
-  filtroTextoAtivo: {
-    color: '#fff',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  emptyTitle: {
-    ...fontes.merriweatherBold,
-    fontSize: 20,
-    color: cores.verdeEscuro,
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  emptyText: {
-    ...fontes.montserrat,
-    fontSize: 14,
-    color: cores.placeholder,
-    textAlign: 'center',
-  },
-  doacaoCard: {
+  resumoCard: {
+    width: '48%',
     backgroundColor: cores.brancoTexto,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  doadorInfo: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  resumoIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginBottom: 12,
   },
-  doadorTexts: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  doadorNome: {
-    ...fontes.montserratBold,
-    fontSize: 16,
+  resumoValue: {
+    ...fontes.merriweatherBold,
+    fontSize: 24,
+    color: cores.verdeEscuro,
     marginBottom: 4,
   },
-  doadorContato: {
-    ...fontes.montserrat,
-    fontSize: 13,
-    color: '#666',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 4,
-  },
-  statusText: {
-    ...fontes.montserratMedium,
-    fontSize: 11,
-  },
-  itemsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: cores.laranjaClaro,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  itemsText: {
-    ...fontes.montserratMedium,
-    fontSize: 14,
-    marginLeft: 10,
-    flex: 1,
-    color: '#333',
-  },
-  modalidadeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modalidadeText: {
-    ...fontes.montserrat,
-    fontSize: 13,
-    marginLeft: 8,
-    color: '#666',
-  },
-  enderecoContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    marginTop: 4,
-  },
-  enderecoText: {
+  resumoLabel: {
     ...fontes.montserrat,
     fontSize: 12,
-    marginLeft: 8,
-    flex: 1,
-    color: '#666',
+    color: '#999',
+    textAlign: 'center',
   },
-  confirmarBtn: {
+  menuGraficos: {
+    paddingHorizontal: 20,
     flexDirection: 'row',
-    backgroundColor: cores.verdeEscuro,
-    paddingVertical: 12,
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 10,
+  },
+  btnGrafico: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: cores.verdeEscuro,
+    gap: 8,
   },
-  confirmarBtnText: {
+  btnAtivo: {
+    backgroundColor: cores.verdeEscuro,
+    borderColor: cores.verdeEscuro,
+  },
+  btnGraficoText: {
     ...fontes.montserratBold,
+    fontSize: 13,
+    color: cores.verdeEscuro,
+  },
+  btnGraficoTextAtivo: {
     color: '#fff',
-    marginLeft: 8,
-    fontSize: 14,
+  },
+  graficoContainer: {
+    marginHorizontal: 20,
+    backgroundColor: cores.brancoTexto,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  graficoTitle: {
+    ...fontes.merriweatherBold,
+    fontSize: 18,
+    color: cores.verdeEscuro,
+    marginBottom: 16,
+  },
+  graficoContent: {
+    gap: 14,
+  },
+  barraItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  barraLabel: {
+    width: 60,
+  },
+  barraLabelText: {
+    ...fontes.montserratMedium,
+    fontSize: 12,
+    color: '#666',
+  },
+  barraContainer: {
+    flex: 1,
+    height: 24,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  barra: {
+    height: '100%',
+  },
+  barraValue: {
+    ...fontes.montserratBold,
+    fontSize: 13,
+    color: cores.verdeEscuro,
+    minWidth: 30,
+    textAlign: 'right',
+  },
+  statusGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statusItem: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusNumber: {
+    ...fontes.merriweatherBold,
+    fontSize: 32,
+    color: '#fff',
+  },
+  statusName: {
+    ...fontes.montserratMedium,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  projetosStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 20,
+  },
+  projetoItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  projetoCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: cores.verdeClaro,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  projetoPercent: {
+    ...fontes.merriweatherBold,
+    fontSize: 32,
+    color: cores.verdeEscuro,
+  },
+  projetoLabel: {
+    ...fontes.montserratBold,
+    fontSize: 13,
+    color: '#333',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  projetoDesc: {
+    ...fontes.montserrat,
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+  },
+  menuGraficosScroll: {
+    maxHeight: 60,
+  },
+  menuGraficosContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  pontuacaoContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  pontuacaoCircle: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: '#FFF9C4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  pontuacaoValue: {
+    ...fontes.merriweatherBold,
+    fontSize: 48,
+    color: '#F9A825',
+  },
+  pontuacaoLabel: {
+    ...fontes.montserratMedium,
+    fontSize: 13,
+    color: '#666',
+    marginTop: 8,
+  },
+  pontuacaoInfo: {
+    width: '100%',
+    gap: 12,
+  },
+  infoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+  },
+  infoLabel: {
+    ...fontes.montserrat,
+    fontSize: 12,
+    color: '#999',
+  },
+  infoValue: {
+    ...fontes.montserratBold,
+    fontSize: 18,
+    color: '#333',
+    marginTop: 4,
   },
 });

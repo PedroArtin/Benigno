@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
+import NavbarDashboard from '../../components/navbarDashboard';
 import { auth } from '../../firebase/firebaseconfig';
 import * as projetosService from '../../services/projetosService';
 
@@ -282,6 +283,7 @@ export default function MeusProjetos({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NavbarDashboard navigation={navigation} instituicao={null} />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
