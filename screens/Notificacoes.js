@@ -67,6 +67,13 @@ export default function Notificacoes({ navigation }) {
     setSalvando(true);
     try {
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao salvar notificações');
+        Alert.alert('Sessão expirada', 'Faça login novamente para salvar as preferências');
+        setSalvando(false);
+        return;
+      }
+
       await atualizarPerfil(user.uid, {
         notificacoes: novasConfiguracoes,
       });
@@ -88,7 +95,7 @@ export default function Notificacoes({ navigation }) {
         {
           text: 'Desativar',
           style: 'destructive',
-          onPress: async () => {
+            onPress: async () => {
             const todasDesativadas = Object.keys(configuracoes).reduce(
               (acc, key) => ({ ...acc, [key]: false }),
               {}
@@ -98,6 +105,13 @@ export default function Notificacoes({ navigation }) {
             setSalvando(true);
             try {
               const user = auth.currentUser;
+              if (!user) {
+                console.warn('Usuário não autenticado ao desativar notificações');
+                Alert.alert('Sessão expirada', 'Faça login novamente para salvar as preferências');
+                setSalvando(false);
+                return;
+              }
+
               await atualizarPerfil(user.uid, {
                 notificacoes: todasDesativadas,
               });
