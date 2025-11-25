@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,7 +41,13 @@ export default function DashboardInstituicao({ navigation }) {
   const carregarDados = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em DashboardInstituicao');
+        Alert.alert('Sessão expirada', 'Faça login novamente para acessar o dashboard', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        return;
+      }
 
       // Carregar instituição
       const instRef = doc(db, 'instituicoes', user.uid);
