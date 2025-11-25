@@ -19,12 +19,14 @@ import { fontes, cores } from '../components/Global';
 import NavbarDashboard from '../components/navbarDashboard';
 import { auth, db } from '../firebase/firebaseconfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { obterClassificacao } from '../services/avaliacoesService';
 
 export default function PerfilInstituicao({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [instituicao, setInstituicao] = useState(null);
+  const [classificacao, setClassificacao] = useState(null);
 
   // Dados da Instituição
   const [nome, setNome] = useState('');
@@ -60,6 +62,9 @@ export default function PerfilInstituicao({ navigation }) {
       if (instDoc.exists()) {
         const data = instDoc.data();
         setInstituicao(data);
+        // Calcular classificação com base em pontos
+        const pontos = data.pontos || data.pontuacao || 0;
+        setClassificacao(obterClassificacao(pontos));
         setNome(data.nome || '');
         setCnpj(data.cnpj || '');
         setEmail(data.email || user.email);
@@ -191,6 +196,11 @@ export default function PerfilInstituicao({ navigation }) {
               </View>
               <Text style={styles.avatarName}>{nome || 'Instituição'}</Text>
               <Text style={styles.avatarEmail}>{email}</Text>
+              {classificacao && (
+                <View style={[styles.rankBadge, { backgroundColor: classificacao.cor + '22' }]}>
+                  <Text style={[styles.rankText, { color: classificacao.cor }]}>{classificacao.nome}</Text>
+                </View>
+              )}
             </View>
 
             {/* Dados da Instituição */}
@@ -439,6 +449,17 @@ const styles = StyleSheet.create({
     ...fontes.montserrat,
     fontSize: 14,
     color: '#666',
+  },
+  rankBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  rankText: {
+    ...fontes.montserratBold,
+    fontSize: 12,
   },
   section: {
     marginBottom: 25,
