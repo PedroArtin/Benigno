@@ -106,6 +106,12 @@ export default function CriarProjeto({ navigation }) {
     try {
       setLoading(true);
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao criar projeto');
+        Alert.alert('Erro', 'Você precisa estar logado para criar um projeto');
+        setLoading(false);
+        return;
+      }
 
       const projetoData = {
         instituicaoId: user.uid,

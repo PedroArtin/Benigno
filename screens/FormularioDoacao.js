@@ -154,6 +154,12 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
     try {
       setLoading(true);
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao salvar avaliação');
+        Alert.alert('Erro', 'Você precisa estar logado para avaliar a instituição');
+        setLoading(false);
+        return;
+      }
 
       await salvarAvaliacao({
         doacaoId: doacaoId,

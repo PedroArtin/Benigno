@@ -100,6 +100,14 @@ export default function PerfilInstituicao({ navigation }) {
     try {
       setSaving(true);
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao salvar perfil da instituição');
+        Alert.alert('Sessão expirada', 'Faça login novamente para salvar o perfil', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setSaving(false);
+        return;
+      }
 
       const dadosAtualizados = {
         nome: nome.trim(),
