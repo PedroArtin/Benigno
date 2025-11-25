@@ -130,6 +130,10 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
         setDoacaoId(resultado.id || resultado.doacaoId);
         // Mostrar modal de avaliação
         setModalAvaliacao(true);
+        // Notificar componente pai para atualizar contadores (UX instantânea)
+        if (onSuccess) {
+          try { onSuccess(); } catch (e) { console.warn('onSuccess callback falhou', e); }
+        }
       } else {
         Alert.alert('Erro', 'Não foi possível registrar a doação. Tente novamente.');
       }
@@ -201,7 +205,12 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
                 <Ionicons name="close" size={28} color={cores.verdeEscuro} />
               </TouchableOpacity>
             </View>
-
+                onPress={() => {
+                  setModalAvaliacao(false);
+                  if (onSuccess) {
+                    try { onSuccess(); } catch (e) { console.warn('onSuccess callback falhou', e); }
+                  }
+                }}
             <ScrollView style={modalStyles.modalBody} showsVerticalScrollIndicator={false}>
               <View style={modalStyles.avaliacaoContainer}>
                 <Text style={modalStyles.avaliacaoLabel}>Como foi sua experiência?</Text>
