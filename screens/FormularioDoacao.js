@@ -193,47 +193,48 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
         animationType="slide"
         onRequestClose={() => setModalAvaliacao(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Avalie a Instituição</Text>
+        <View style={modalStyles.modalOverlay}>
+          <View style={modalStyles.modalContent}>
+            <View style={modalStyles.modalHeader}>
+              <Text style={modalStyles.modalTitle}>Avalie a Instituição</Text>
               <TouchableOpacity onPress={() => setModalAvaliacao(false)}>
                 <Ionicons name="close" size={28} color={cores.verdeEscuro} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <View style={styles.avaliacaoContainer}>
-                <Text style={styles.avaliacaoLabel}>Como foi sua experiência?</Text>
+            <ScrollView style={modalStyles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={modalStyles.avaliacaoContainer}>
+                <Text style={modalStyles.avaliacaoLabel}>Como foi sua experiência?</Text>
                 
                 {/* Estrelas */}
-                <View style={styles.estrelasContainer}>
+                <View style={modalStyles.estrelasContainer}>
                   {[1, 2, 3, 4, 5].map((estrela) => (
                     <TouchableOpacity
                       key={estrela}
                       onPress={() => setEstrelasSelecionadas(estrela)}
+                      activeOpacity={0.8}
                     >
                       <Ionicons
                         name={estrela <= estrelasSelecionadas ? 'star' : 'star-outline'}
-                        size={48}
-                        color={estrela <= estrelasSelecionadas ? '#F9A825' : '#DDD'}
+                        size={46}
+                        color={estrela <= estrelasSelecionadas ? '#F9A825' : '#E0E0E0'}
                       />
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                <Text style={styles.estrelaTexto}>
+                <Text style={modalStyles.estrelaTexto}>
                   {estrelasSelecionadas === 0
                     ? 'Selecione uma classificação'
                     : `${estrelasSelecionadas} estrela${estrelasSelecionadas !== 1 ? 's' : ''}`}
                 </Text>
 
                 {/* Comentário */}
-                <Text style={styles.comentarioLabel}>Deixe um comentário (opcional)</Text>
+                <Text style={modalStyles.comentarioLabel}>Deixe um comentário (opcional)</Text>
                 <TextInput
-                  style={styles.comentarioInput}
+                  style={modalStyles.comentarioInput}
                   placeholder="Conte-nos sua experiência..."
-                  placeholderTextColor="#CCC"
+                  placeholderTextColor="#AAA"
                   value={comentario}
                   onChangeText={setComentario}
                   multiline
@@ -242,20 +243,22 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
               </View>
             </ScrollView>
 
-            <View style={styles.modalFooter}>
+            <View style={modalStyles.modalFooter}>
               <TouchableOpacity
-                style={styles.btnCancelar}
+                style={modalStyles.btnCancelar}
                 onPress={() => setModalAvaliacao(false)}
+                activeOpacity={0.8}
               >
-                <Text style={styles.btnCancelarText}>Pular</Text>
+                <Text style={modalStyles.btnCancelarText}>Pular</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.btnSalvar}
+                style={[modalStyles.btnSalvar, loading && modalStyles.btnDisabled]}
                 onPress={handleSalvarAvaliacao}
                 disabled={loading}
+                activeOpacity={0.9}
               >
                 <Ionicons name="checkmark" size={20} color="#fff" />
-                <Text style={styles.btnSalvarText}>
+                <Text style={modalStyles.btnSalvarText}>
                   {loading ? 'Salvando...' : 'Enviar Avaliação'}
                 </Text>
               </TouchableOpacity>
@@ -726,5 +729,8 @@ const modalStyles = StyleSheet.create({
     ...fontes.montserratBold,
     fontSize: 14,
     color: '#fff',
+  },
+  btnDisabled: {
+    opacity: 0.7,
   },
 });
