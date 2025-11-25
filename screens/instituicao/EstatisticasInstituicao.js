@@ -73,27 +73,42 @@ export default function EstatisticasInstituicao({ navigation }) {
       const doacoes = doacoesSnap.docs.map((d) => d.data());
 
       // Processar estatísticas
-      const doacoesPorStatus = { pendente: 0, confirmada: 0, entregue: 0 };
+      const doacoesPorStatus = { pendente: 0, confirmada: 0, entregue: 0, recebida: 0, cancelada: 0 };
       const doacoesPorMes = {};
 
       doacoes.forEach((d) => {
-        doacoesPorStatus[d.status] = (doacoesPorStatus[d.status] || 0) + 1;
+        // Proteger contra status inválido
+        if (d.status && doacoesPorStatus.hasOwnProperty(d.status)) {
+          doacoesPorStatus[d.status] = (doacoesPorStatus[d.status] || 0) + 1;
+        }
 
         if (d.dataDoacao) {
-          const data = d.dataDoacao.toDate ? d.dataDoacao.toDate() : new Date(d.dataDoacao);
-          const mes = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
-          doacoesPorMes[mes] = (doacoesPorMes[mes] || 0) + 1;
+          try {
+            const data = d.dataDoacao.toDate ? d.dataDoacao.toDate() : new Date(d.dataDoacao);
+            // Validar se data é válida
+            if (!isNaN(data.getTime())) {
+              const mes = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+              doacoesPorMes[mes] = (doacoesPorMes[mes] || 0) + 1;
+            }
+          } catch (e) {
+            console.warn('Erro ao parsear data de doação:', d.dataDoacao, e);
+          }
         }
       });
 
+      // Calcular média com proteção contra divisão por zero
+      const mediaDocoesProj = projetos.length > 0 
+        ? Math.round(doacoes.length / projetos.length * 100) / 100
+        : 0;
+
       setStats({
-        totalProjetos: projetos.length,
-        projetosAtivos: projetosAtivos,
-        totalDoacoes: doacoes.length,
+        totalProjetos: projetos.length || 0,
+        projetosAtivos: projetosAtivos || 0,
+        totalDoacoes: doacoes.length || 0,
         doacoesPorMes,
         doacoesPorStatus,
-        mediaDocoesProj: projetos.length > 0 ? Math.round(doacoes.length / projetos.length) : 0,
-        pontuacao: pontuacao,
+        mediaDocoesProj,
+        pontuacao: pontuacao || 0,
       });
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
