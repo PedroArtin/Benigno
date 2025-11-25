@@ -27,8 +27,16 @@ export default function HistoricoAtividades({ navigation }) {
   const carregarHistorico = async () => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        const estatisticas = await buscarEstatisticas(user.uid);
+      if (!user) {
+        console.warn('Usuário não autenticado ao carregar histórico');
+        Alert.alert('Erro', 'Faça login para ver seu histórico', [
+          { text: 'OK', onPress: () => navigation.replace('Login') },
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const estatisticas = await buscarEstatisticas(user.uid);
         
         const atividadesDoacoes = estatisticas.listaDoacoes?.map(doacao => ({
           id: doacao.id,
@@ -76,7 +84,6 @@ export default function HistoricoAtividades({ navigation }) {
         );
 
         setAtividades(todasAtividades);
-      }
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
     } finally {
