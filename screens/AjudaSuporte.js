@@ -29,21 +29,16 @@ export default function AjudaSuporte({ navigation }) {
     },
     {
       id: 3,
-      pergunta: 'Posso acompanhar para onde foi meu dinheiro?',
-      resposta: 'Sim! Cada projeto tem atualizações regulares e você pode ver o progresso na aba "Minhas Doações". Os projetos também enviam relatórios de prestação de contas.',
-    },
-    {
-      id: 4,
       pergunta: 'Como funcionam os pontos?',
       resposta: 'Você ganha 10 pontos para cada doação realizada. Os pontos podem ser usados para desbloquear benefícios exclusivos e badges especiais no aplicativo.',
     },
     {
-      id: 5,
+      id: 4,
       pergunta: 'Posso cancelar uma doação?',
       resposta: 'Doações recorrentes podem ser canceladas a qualquer momento nas configurações. Doações únicas já processadas não podem ser canceladas, mas você pode entrar em contato conosco para casos especiais.',
     },
     {
-      id: 6,
+      id: 5,
       pergunta: 'Como adicionar um projeto?',
       resposta: 'Se você representa uma instituição e deseja adicionar um projeto, entre em contato através do e-mail parceiros@bengoa.com.br. Nossa equipe analisará sua solicitação.',
     },
@@ -63,11 +58,11 @@ export default function AjudaSuporte({ navigation }) {
   };
 
   const handleEnviarEmail = () => {
-    handleOpenURL('mailto:suporte@bengoa.com.br?subject=Preciso de Ajuda');
+    handleOpenURL('mailto:suporte@benigno.com.br?subject=Preciso de Ajuda');
   };
 
   const handleAbrirWhatsApp = () => {
-    handleOpenURL('https://wa.me/5513999999999?text=Olá, preciso de ajuda com o app Bengoa');
+    handleOpenURL('https://wa.me/5513988601880?text=Olá, preciso de ajuda com o app Benigno');
   };
 
   const toggleFAQ = (id) => {
@@ -99,7 +94,7 @@ export default function AjudaSuporte({ navigation }) {
               </View>
               <View style={styles.contactInfo}>
                 <Text style={styles.contactTitle}>E-mail</Text>
-                <Text style={styles.contactText}>suporte@bengoa.com.br</Text>
+                <Text style={styles.contactText}>suporte@benigno.com.br</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
@@ -113,7 +108,7 @@ export default function AjudaSuporte({ navigation }) {
               </View>
               <View style={styles.contactInfo}>
                 <Text style={styles.contactTitle}>WhatsApp</Text>
-                <Text style={styles.contactText}>(13) 99999-9999</Text>
+                <Text style={styles.contactText}>(13) 98860-1880</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>

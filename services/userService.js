@@ -126,3 +126,129 @@ export const verificarFavorito = async (userId, projetoId) => {
     return false;
   }
 };
+
+// ============================================
+// PERFIL DO USUÁRIO
+// ============================================
+
+/**
+ * Buscar perfil do usuário
+ * @param {string} userId - ID do usuário
+ * @returns {Promise<Object|null>} Dados do perfil ou null
+ */
+export const buscarPerfilUsuario = async (userId) => {
+  try {
+    const perfilRef = doc(db, 'usuarios', userId);
+    const perfilSnap = await getDoc(perfilRef);
+    
+    if (perfilSnap.exists()) {
+      return perfilSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error('Erro ao buscar perfil:', error);
+    return null;
+  }
+};
+
+/**
+ * Criar perfil do usuário
+ * @param {string} userId - ID do usuário
+ * @param {Object} dadosUsuario - Dados iniciais do usuário
+ * @returns {Promise<Object>} Dados do perfil criado
+ */
+export const criarPerfilUsuario = async (userId, dadosUsuario) => {
+  try {
+    const perfilData = {
+      nome: dadosUsuario.nome || 'Usuário',
+      email: dadosUsuario.email,
+      foto: dadosUsuario.foto || null,
+      telefone: '',
+      bio: '',
+      pontos: 0,
+      dataCriacao: Timestamp.now(),
+      dataAtualizacao: Timestamp.now(),
+    };
+    
+    const perfilRef = doc(db, 'usuarios', userId);
+    await setDoc(perfilRef, perfilData);
+    
+    return perfilData;
+  } catch (error) {
+    console.error('Erro ao criar perfil:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualizar perfil do usuário
+ * @param {string} userId - ID do usuário
+ * @param {Object} dadosAtualizacao - Dados a atualizar
+ * @returns {Promise<void>}
+ */
+export const atualizarPerfil = async (userId, dadosAtualizacao) => {
+  try {
+    const perfilRef = doc(db, 'usuarios', userId);
+    await setDoc(perfilRef, {
+      ...dadosAtualizacao,
+      dataAtualizacao: Timestamp.now(),
+    }, { merge: true });
+  } catch (error) {
+    console.error('Erro ao atualizar perfil:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// ESTATÍSTICAS DO USUÁRIO
+// ============================================
+
+/**
+ * Buscar estatísticas do usuário
+ * @param {string} userId - ID do usuário
+ * @returns {Promise<Object>} Estatísticas (doacoes, favoritos, pontos)
+ */
+export const buscarEstatisticas = async (userId) => {
+  try {
+    // Contar doações
+    const qDoacoes = query(
+      collection(db, 'doacoes'),
+      where('doadorId', '==', userId)
+    );
+    const snapshotDoacoes = await getDocs(qDoacoes);
+    const totalDoacoes = snapshotDoacoes.size;
+    
+    // Contar favoritos
+    const qFavoritos = query(
+      collection(db, 'favoritos'),
+      where('userId', '==', userId)
+    );
+    const snapshotFavoritos = await getDocs(qFavoritos);
+    const totalFavoritos = snapshotFavoritos.size;
+    
+    // Buscar pontos do perfil
+    let pontos = 0;
+    try {
+      const perfilRef = doc(db, 'usuarios', userId);
+      const perfilSnap = await getDoc(perfilRef);
+      if (perfilSnap.exists()) {
+        pontos = perfilSnap.data().pontos || 0;
+      }
+    } catch (e) {
+      // Silencioso se não encontrar
+    }
+    
+    return {
+      doacoes: totalDoacoes,
+      favoritos: totalFavoritos,
+      pontos: pontos,
+    };
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
+    return {
+      doacoes: 0,
+      favoritos: 0,
+      pontos: 0,
+    };
+  }
+};

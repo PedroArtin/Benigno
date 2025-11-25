@@ -42,7 +42,7 @@ export default function SobreApp({ navigation }) {
             <View style={styles.logoPlaceholder}>
               <Ionicons name="heart" size={60} color={cores.brancoTexto} />
             </View>
-            <Text style={styles.appName}>Bengoa</Text>
+            <Text style={styles.appName}>Benigno</Text>
             <Text style={styles.versao}>Versão 1.0.0</Text>
             <Text style={styles.tagline}>
               Conectando corações generosos a causas transformadoras
@@ -91,28 +91,7 @@ export default function SobreApp({ navigation }) {
             </View>
           </View>
 
-          {/* Estatísticas */}
-          <View style={styles.statsSection}>
-            <Text style={styles.statsTitle}>Nosso Impacto</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Ionicons name="people" size={32} color={cores.verdeEscuro} />
-                <Text style={styles.statNumber}>50K+</Text>
-                <Text style={styles.statLabel}>Doadores</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Ionicons name="folder" size={32} color={cores.verdeEscuro} />
-                <Text style={styles.statNumber}>200+</Text>
-                <Text style={styles.statLabel}>Projetos</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Ionicons name="cash" size={32} color={cores.verdeEscuro} />
-                <Text style={styles.statNumber}>R$ 5M</Text>
-                <Text style={styles.statLabel}>Arrecadados</Text>
-              </View>
-            </View>
-          </View>
-
+  
           {/* Equipe */}
           <View style={styles.section}>
             <View style={styles.iconHeader}>
@@ -132,25 +111,25 @@ export default function SobreApp({ navigation }) {
             <View style={styles.socialButtons}>
               <TouchableOpacity
                 style={styles.socialButton}
-                onPress={() => handleOpenURL('https://instagram.com/bengoa')}
+                onPress={() => handleOpenURL('https://instagram.com/benigno')}
               >
                 <Ionicons name="logo-instagram" size={28} color={cores.brancoTexto} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.socialButton}
-                onPress={() => handleOpenURL('https://facebook.com/bengoa')}
+                onPress={() => handleOpenURL('https://facebook.com/benigno')}
               >
                 <Ionicons name="logo-facebook" size={28} color={cores.brancoTexto} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.socialButton}
-                onPress={() => handleOpenURL('https://twitter.com/bengoa')}
+                onPress={() => handleOpenURL('https://twitter.com/benigno')}
               >
                 <Ionicons name="logo-twitter" size={28} color={cores.brancoTexto} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.socialButton}
-                onPress={() => handleOpenURL('https://linkedin.com/company/bengoa')}
+                onPress={() => handleOpenURL('https://linkedin.com/company/benigno')}
               >
                 <Ionicons name="logo-linkedin" size={28} color={cores.brancoTexto} />
               </TouchableOpacity>
@@ -175,7 +154,7 @@ export default function SobreApp({ navigation }) {
 
           {/* Copyright */}
           <Text style={styles.copyright}>
-            © 2025 Bengoa. Todos os direitos reservados.
+            © 2025 Benigno. Todos os direitos reservados.
           </Text>
           <Text style={styles.madeWith}>
             Feito com <Ionicons name="heart" size={12} color={cores.laranjaEscuro} /> no Brasil

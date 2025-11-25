@@ -1,80 +1,57 @@
-// screens/instituicao/DashboardInstituicao.js
+// screens/instituicao/MeusProjetos.js - TELA COM OPERAÇÕES CRUD
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
+  Alert,
   RefreshControl,
-  Dimensions,
+  Modal,
+  TextInput,
+  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
-import { auth, db } from '../../firebase/firebaseconfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth } from '../../firebase/firebaseconfig';
 import * as projetosService from '../../services/projetosService';
 
-const { width } = Dimensions.get('window');
-
-export default function DashboardInstituicao({ navigation }) {
-  const [instituicao, setInstituicao] = useState(null);
-  const [stats, setStats] = useState({
-    totalProjetos: 0,
-    projetosAtivos: 0,
-    totalDoacoes: 0,
-    doacoesPendentes: 0,
-    doacoesMes: 0,
-  });
-  const [projetosRecentes, setProjetosRecentes] = useState([]);
-  const [doacoesRecentes, setDoacoesRecentes] = useState([]);
+export default function MeusProjetos({ navigation }) {
+  const [projetos, setProjetos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [projetoSelecionado, setProjetoSelecionado] = useState(null);
+  const [modalEditando, setModalEditando] = useState(false);
+  const [dadosEdicao, setDadosEdicao] = useState({
+    titulo: '',
+    descricao: '',
+  });
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    carregarDados();
-  }, []);
+    carregarProjetos();
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      carregarProjetos();
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
 
-  const carregarDados = async () => {
+  const carregarProjetos = async () => {
     try {
+      setLoading(true);
       const user = auth.currentUser;
       if (!user) return;
 
-      // Carregar instituição
-      const instRef = doc(db, 'instituicoes', user.uid);
-      const instDoc = await getDoc(instRef);
-      if (instDoc.exists()) {
-        setInstituicao(instDoc.data());
-      }
-
-      // Carregar projetos
-      const projetos = await projetosService.buscarProjetosInstituicao(user.uid);
-      const projetosAtivos = projetos.filter(p => p.ativo);
-      setProjetosRecentes(projetos.slice(0, 3)); // Últimos 3
-
-      // Carregar doações
-      const doacoes = await projetosService.buscarDoacoesInstituicao(user.uid);
-      const doacoesPendentes = doacoes.filter(d => d.status === 'pendente');
-      
-      // Doações deste mês
-      const mesAtual = new Date().getMonth();
-      const doacoesMes = doacoes.filter(d => {
-        const dataDoa = d.dataDoacao?.toDate?.() || new Date(d.dataDoacao);
-        return dataDoa.getMonth() === mesAtual;
-      });
-
-      setDoacoesRecentes(doacoes.slice(0, 5)); // Últimas 5
-
-      setStats({
-        totalProjetos: projetos.length,
-        projetosAtivos: projetosAtivos.length,
-        totalDoacoes: doacoes.length,
-        doacoesPendentes: doacoesPendentes.length,
-        doacoesMes: doacoesMes.length,
-      });
+      const projetosData = await projetosService.buscarProjetosInstituicao(user.uid);
+      setProjetos(projetosData);
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('Erro ao carregar projetos:', error);
+      Alert.alert('Erro', 'Não foi possível carregar seus projetos');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -83,14 +60,221 @@ export default function DashboardInstituicao({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
-    carregarDados();
+    carregarProjetos();
   };
+
+  const abrirModalEdicao = (projeto) => {
+    setProjetoSelecionado(projeto);
+    setDadosEdicao({
+      titulo: projeto.titulo,
+      descricao: projeto.descricao,
+    });
+    setModalEditando(true);
+  };
+
+  const salvarEdicao = async () => {
+    if (!dadosEdicao.titulo.trim()) {
+      Alert.alert('Erro', 'O título do projeto é obrigatório');
+      return;
+    }
+
+    setSalvando(true);
+    try {
+      await projetosService.atualizarProjeto(projetoSelecionado.id, {
+        titulo: dadosEdicao.titulo,
+        descricao: dadosEdicao.descricao,
+      });
+
+      Alert.alert('Sucesso! 🎉', 'Projeto atualizado com sucesso');
+      setModalEditando(false);
+      carregarProjetos();
+    } catch (error) {
+      console.error('Erro ao atualizar:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar o projeto');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const alternarStatus = async (projeto) => {
+    Alert.alert(
+      projeto.ativo ? 'Desativar Projeto?' : 'Ativar Projeto?',
+      `Tem certeza que deseja ${projeto.ativo ? 'desativar' : 'ativar'} "${projeto.titulo}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, confirmar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await projetosService.atualizarProjeto(projeto.id, {
+                ativo: !projeto.ativo,
+              });
+
+              Alert.alert(
+                'Sucesso! 🎉',
+                `Projeto ${!projeto.ativo ? 'ativado' : 'desativado'} com sucesso`
+              );
+              carregarProjetos();
+            } catch (error) {
+              console.error('Erro ao alterar status:', error);
+              Alert.alert('Erro', 'Não foi possível alterar o status');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const deletarProjeto = async (projeto) => {
+    Alert.alert(
+      '⚠️ Deletar Projeto?',
+      `Esta ação é irreversível! Você realmente quer deletar "${projeto.titulo}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, deletar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await projetosService.deletarProjeto(projeto.id);
+
+              Alert.alert('Sucesso! 🎉', 'Projeto deletado com sucesso');
+              carregarProjetos();
+            } catch (error) {
+              console.error('Erro ao deletar:', error);
+              Alert.alert('Erro', 'Não foi possível deletar o projeto');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderProjeto = ({ item }) => (
+    <View style={styles.projetoCard}>
+      {/* Header com Status */}
+      <View style={styles.cardHeader}>
+        <View style={styles.headerLeft}>
+          <Ionicons
+            name={item.ativo ? 'checkmark-circle' : 'close-circle'}
+            size={24}
+            color={item.ativo ? cores.verdeEscuro : '#999'}
+          />
+          <View style={styles.headerInfo}>
+            <Text style={styles.projetoTitulo} numberOfLines={2}>
+              {item.titulo}
+            </Text>
+            <Text style={styles.projetoCategoria}>
+              {item.categoria || 'Sem categoria'}
+            </Text>
+          </View>
+        </View>
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor: item.ativo ? cores.verdeClaro : '#F5F5F5',
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color: item.ativo ? cores.verdeEscuro : '#999',
+              },
+            ]}
+          >
+            {item.ativo ? 'Ativo' : 'Inativo'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Stats */}
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Ionicons name="gift" size={16} color={cores.laranjaEscuro} />
+          <Text style={styles.statText}>
+            {item.doacoesRecebidas || 0} doações
+          </Text>
+        </View>
+        <View style={styles.statItem}>
+          <Ionicons name="people" size={16} color={cores.verdeEscuro} />
+          <Text style={styles.statText}>
+            {item.contribuicoes || 0} contribuintes
+          </Text>
+        </View>
+      </View>
+
+      {/* Descrição */}
+      {item.descricao && (
+        <Text style={styles.projetoDescricao} numberOfLines={2}>
+          {item.descricao}
+        </Text>
+      )}
+
+      {/* Botões de Ação */}
+      <View style={styles.actionsContainer}>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.editBtn]}
+          onPress={() => abrirModalEdicao(item)}
+        >
+          <Ionicons name="pencil" size={16} color="#fff" />
+          <Text style={styles.actionBtnText}>Editar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.actionBtn,
+            item.ativo ? styles.desativarBtn : styles.ativarBtn,
+          ]}
+          onPress={() => alternarStatus(item)}
+        >
+          <Ionicons
+            name={item.ativo ? 'close-circle' : 'checkmark-circle'}
+            size={16}
+            color="#fff"
+          />
+          <Text style={styles.actionBtnText}>
+            {item.ativo ? 'Desativar' : 'Ativar'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.deleteBtn]}
+          onPress={() => deletarProjeto(item)}
+        >
+          <Ionicons name="trash" size={16} color="#fff" />
+          <Text style={styles.actionBtnText}>Deletar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const EmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="folder-open-outline" size={80} color={cores.placeholder} />
+      <Text style={styles.emptyTitle}>Nenhum Projeto Criado</Text>
+      <Text style={styles.emptyText}>
+        Comece criando seu primeiro projeto
+      </Text>
+      <TouchableOpacity
+        style={styles.criarBtn}
+        onPress={() => navigation.navigate('CriarProjeto')}
+      >
+        <Ionicons name="add-circle" size={24} color="#fff" />
+        <Text style={styles.criarBtnText}>Criar Projeto</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Carregando...</Text>
+          <ActivityIndicator size="large" color={cores.verdeEscuro} />
+          <Text style={styles.loadingText}>Carregando projetos...</Text>
         </View>
       </SafeAreaView>
     );
@@ -98,179 +282,111 @@ export default function DashboardInstituicao({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={cores.verdeEscuro} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Meus Projetos</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('CriarProjeto')}
+          style={styles.addBtn}
+        >
+          <Ionicons name="add-circle" size={28} color={cores.verdeEscuro} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Lista de Projetos */}
+      <FlatList
+        data={projetos}
+        renderItem={renderProjeto}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={<EmptyState />}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+      />
+
+      {/* Modal de Edição */}
+      <Modal
+        visible={modalEditando}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalEditando(false)}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Olá! 👋</Text>
-            <Text style={styles.institutionName}>{instituicao?.nome}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.notificationBtn}
-            onPress={() => {/* Notificações */}}
-          >
-            <Ionicons name="notifications-outline" size={26} color={cores.verdeEscuro} />
-            {stats.doacoesPendentes > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{stats.doacoesPendentes}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Cards de Estatísticas Principais */}
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, styles.statCardLarge]}>
-            <View style={styles.statCardHeader}>
-              <View style={[styles.statIcon, { backgroundColor: cores.verdeClaro }]}>
-                <Ionicons name="folder" size={28} color={cores.verdeEscuro} />
-              </View>
-              <View style={styles.statTrend}>
-                <Ionicons name="trending-up" size={16} color="#4CAF50" />
-                <Text style={styles.trendText}>+12%</Text>
-              </View>
-            </View>
-            <Text style={styles.statNumber}>{stats.projetosAtivos}</Text>
-            <Text style={styles.statLabel}>Projetos Ativos</Text>
-            <Text style={styles.statSubtext}>
-              {stats.totalProjetos} total
-            </Text>
-          </View>
-
-          <View style={[styles.statCard, styles.statCardLarge]}>
-            <View style={styles.statCardHeader}>
-              <View style={[styles.statIcon, { backgroundColor: cores.laranjaClaro }]}>
-                <Ionicons name="gift" size={28} color={cores.laranjaEscuro} />
-              </View>
-              <View style={styles.statTrend}>
-                <Ionicons name="trending-up" size={16} color="#4CAF50" />
-                <Text style={styles.trendText}>+8%</Text>
-              </View>
-            </View>
-            <Text style={styles.statNumber}>{stats.totalDoacoes}</Text>
-            <Text style={styles.statLabel}>Doações Recebidas</Text>
-            <Text style={styles.statSubtext}>
-              {stats.doacoesMes} este mês
-            </Text>
-          </View>
-        </View>
-
-        {/* Ações Rápidas */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ações Rápidas</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('CriarProjeto')}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: cores.verdeClaro }]}>
-                <Ionicons name="add-circle" size={32} color={cores.verdeEscuro} />
-              </View>
-              <Text style={styles.actionText}>Novo Projeto</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('MeusProjetos')}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: cores.laranjaClaro }]}>
-                <Ionicons name="folder-open" size={32} color={cores.laranjaEscuro} />
-              </View>
-              <Text style={styles.actionText}>Meus Projetos</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('DoacoesRecebidas')}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: '#E3F2FD' }]}>
-                <Ionicons name="gift" size={32} color="#1976D2" />
-              </View>
-              <Text style={styles.actionText}>Ver Doações</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('EstatisticasInst')}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: '#F3E5F5' }]}>
-                <Ionicons name="bar-chart" size={32} color="#7B1FA2" />
-              </View>
-              <Text style={styles.actionText}>Relatórios</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Doações Pendentes */}
-        {stats.doacoesPendentes > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>⚠️ Doações Pendentes</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('DoacoesRecebidas')}>
-                <Text style={styles.seeAllBtn}>Ver todas</Text>
+        <SafeAreaView style={styles.modal}>
+          <ScrollView style={styles.modalContent}>
+            {/* Header do Modal */}
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={() => setModalEditando(false)}
+              >
+                <Ionicons name="close" size={28} color={cores.verdeEscuro} />
               </TouchableOpacity>
+              <Text style={styles.modalTitle}>Editar Projeto</Text>
+              <View style={{ width: 28 }} />
             </View>
-            <View style={styles.alertCard}>
-              <Ionicons name="time" size={40} color={cores.laranjaEscuro} />
-              <View style={styles.alertContent}>
-                <Text style={styles.alertTitle}>
-                  {stats.doacoesPendentes} doação(ões) aguardando confirmação
-                </Text>
-                <Text style={styles.alertText}>
-                  Confira e confirme as entregas recebidas
-                </Text>
+
+            {/* Formulário */}
+            <View style={styles.formContainer}>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Título do Projeto *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: Projeto de Educação"
+                  value={dadosEdicao.titulo}
+                  onChangeText={(text) =>
+                    setDadosEdicao({ ...dadosEdicao, titulo: text })
+                  }
+                  editable={!salvando}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Descrição</Text>
+                <TextInput
+                  style={[styles.input, styles.textarea]}
+                  placeholder="Descreva seu projeto..."
+                  value={dadosEdicao.descricao}
+                  onChangeText={(text) =>
+                    setDadosEdicao({ ...dadosEdicao, descricao: text })
+                  }
+                  multiline
+                  numberOfLines={4}
+                  editable={!salvando}
+                />
+              </View>
+
+              {/* Botões */}
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.cancelBtn]}
+                  onPress={() => setModalEditando(false)}
+                  disabled={salvando}
+                >
+                  <Text style={styles.cancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.salvarBtn]}
+                  onPress={salvarEdicao}
+                  disabled={salvando}
+                >
+                  {salvando ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                      <Text style={styles.salvarBtnText}>Salvar</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
-          </View>
-        )}
-
-        {/* Projetos Recentes */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Projetos Recentes</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('MeusProjetos')}>
-              <Text style={styles.seeAllBtn}>Ver todos</Text>
-            </TouchableOpacity>
-          </View>
-
-          {projetosRecentes.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="folder-open-outline" size={60} color={cores.placeholder} />
-              <Text style={styles.emptyText}>Nenhum projeto criado</Text>
-            </View>
-          ) : (
-            projetosRecentes.map((projeto) => (
-              <View key={projeto.id} style={styles.projetoMini}>
-                <View style={styles.projetoMiniLeft}>
-                  <View style={[styles.projetoIcon, { backgroundColor: cores.verdeClaro }]}>
-                    <Ionicons name="folder" size={24} color={cores.verdeEscuro} />
-                  </View>
-                  <View style={styles.projetoInfo}>
-                    <Text style={styles.projetoTitulo} numberOfLines={1}>
-                      {projeto.titulo}
-                    </Text>
-                    <Text style={styles.projetoMeta}>
-                      {projeto.doacoesRecebidas || 0} doações recebidas
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: projeto.ativo ? cores.verdeClaro : '#E0E0E0' }]}>
-                  <Text style={[styles.statusText, { color: projeto.ativo ? cores.verdeEscuro : '#999' }]}>
-                    {projeto.ativo ? 'Ativo' : 'Inativo'}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={{ height: 80 }} />
-      </ScrollView>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -288,228 +404,67 @@ const styles = StyleSheet.create({
   loadingText: {
     ...fontes.montserrat,
     fontSize: 16,
+    color: '#666',
+    marginTop: 10,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  greeting: {
-    ...fontes.montserrat,
-    fontSize: 16,
-    color: '#666',
-  },
-  institutionName: {
-    ...fontes.merriweatherBold,
-    fontSize: 24,
-    color: cores.verdeEscuro,
-    marginTop: 4,
-  },
-  notificationBtn: {
-    position: 'relative',
-  },
-  badge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: cores.laranjaEscuro,
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    ...fontes.montserratBold,
-    fontSize: 10,
-    color: '#fff',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 15,
-    marginBottom: 25,
-  },
-  statCard: {
+    paddingVertical: 15,
     backgroundColor: cores.brancoTexto,
-    borderRadius: 20,
-    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  headerTitle: {
+    ...fontes.merriweatherBold,
+    fontSize: 20,
+    color: cores.verdeEscuro,
+  },
+  addBtn: {
+    padding: 8,
+  },
+  listContent: {
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+  },
+  projetoCard: {
+    backgroundColor: cores.brancoTexto,
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  statCardLarge: {
-    flex: 1,
-  },
-  statCardHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  statIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statTrend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    height: 24,
-  },
-  trendText: {
-    ...fontes.montserratBold,
-    fontSize: 11,
-    color: '#4CAF50',
-    marginLeft: 2,
-  },
-  statNumber: {
-    ...fontes.merriweatherBold,
-    fontSize: 32,
-    marginBottom: 4,
-  },
-  statLabel: {
-    ...fontes.montserratMedium,
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  statSubtext: {
-    ...fontes.montserrat,
-    fontSize: 12,
-    color: '#999',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 25,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    ...fontes.montserratBold,
-    fontSize: 18,
-    color: cores.verdeEscuro,
-  },
-  seeAllBtn: {
-    ...fontes.montserratMedium,
-    fontSize: 14,
-    color: cores.laranjaEscuro,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  actionCard: {
-    width: (width - 56) / 2,
-    backgroundColor: cores.brancoTexto,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  actionText: {
-    ...fontes.montserratMedium,
-    fontSize: 13,
-    textAlign: 'center',
-    color: '#333',
-  },
-  alertCard: {
-    flexDirection: 'row',
-    backgroundColor: cores.laranjaClaro,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  alertContent: {
-    marginLeft: 15,
+  headerLeft: {
     flex: 1,
-  },
-  alertTitle: {
-    ...fontes.montserratBold,
-    fontSize: 15,
-    color: cores.laranjaEscuro,
-    marginBottom: 4,
-  },
-  alertText: {
-    ...fontes.montserrat,
-    fontSize: 13,
-    color: '#666',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    ...fontes.montserratMedium,
-    fontSize: 16,
-    color: cores.placeholder,
-    marginTop: 15,
-  },
-  projetoMini: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: cores.brancoTexto,
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  projetoMiniLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  projetoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  projetoInfo: {
+  headerInfo: {
     flex: 1,
   },
   projetoTitulo: {
     ...fontes.montserratBold,
-    fontSize: 14,
+    fontSize: 16,
+    color: cores.verdeEscuro,
     marginBottom: 4,
   },
-  projetoMeta: {
+  projetoCategoria: {
     ...fontes.montserrat,
     fontSize: 12,
-    color: '#666',
+    color: '#999',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -517,7 +472,170 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusText: {
-    ...fontes.montserratMedium,
+    ...fontes.montserratBold,
     fontSize: 11,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statText: {
+    ...fontes.montserrat,
+    fontSize: 12,
+    color: '#666',
+  },
+  projetoDescricao: {
+    ...fontes.montserrat,
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
+    minWidth: '30%',
+    justifyContent: 'center',
+  },
+  editBtn: {
+    backgroundColor: cores.verdeEscuro,
+  },
+  ativarBtn: {
+    backgroundColor: '#4CAF50',
+  },
+  desativarBtn: {
+    backgroundColor: '#FF9800',
+  },
+  deleteBtn: {
+    backgroundColor: '#D32F2F',
+  },
+  actionBtnText: {
+    ...fontes.montserratBold,
+    fontSize: 12,
+    color: '#fff',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    ...fontes.merriweatherBold,
+    fontSize: 18,
+    color: cores.verdeEscuro,
+    marginTop: 15,
+    marginBottom: 8,
+  },
+  emptyText: {
+    ...fontes.montserrat,
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 25,
+  },
+  criarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: cores.verdeEscuro,
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  criarBtnText: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#fff',
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: cores.fundoBranco,
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalTitle: {
+    ...fontes.merriweatherBold,
+    fontSize: 18,
+    color: cores.verdeEscuro,
+  },
+  formContainer: {
+    padding: 20,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: cores.verdeEscuro,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: fontes.montserrat.fontFamily,
+  },
+  textarea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  modalBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  cancelBtn: {
+    backgroundColor: '#E0E0E0',
+  },
+  cancelBtnText: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#666',
+  },
+  salvarBtn: {
+    backgroundColor: cores.verdeEscuro,
+  },
+  salvarBtnText: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#fff',
   },
 });

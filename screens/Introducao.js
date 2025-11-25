@@ -24,7 +24,7 @@ export default function Introducao({ navigation }) {
       onPressBotao={() => navigation.navigate('PExplicacao')}
     >
       <View style={{ marginTop: 20 }}>
-        <Text>Firebase carregado: {auth && db ? "✅ OK" : "❌ Falhou"}</Text>
+        <Text>Firebase carregado: {auth && db ? " OK" : " Falhou"}</Text>
       </View>
     </TelaBase>
   );

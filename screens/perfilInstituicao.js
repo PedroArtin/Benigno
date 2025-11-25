@@ -15,8 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TextInputMask } from 'react-native-masked-text';
-import { fontes, cores } from '../../components/Global';
-import { auth, db } from '../../firebase/firebaseconfig';
+import { fontes, cores } from '../components/Global';
+import { auth, db } from '../firebase/firebaseconfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 export default function PerfilInstituicao({ navigation }) {

@@ -206,35 +206,6 @@ export const desativarProjeto = async (projetoId) => {
 // ============================================
 
 /**
- * Criar nova doação
- */
-export const criarDoacao = async (doacaoData) => {
-  try {
-    console.log('🎁 Criando doação...', doacaoData);
-    
-    const docRef = await addDoc(collection(db, 'doacoes'), {
-      ...doacaoData,
-      status: 'pendente',
-      dataDoacao: serverTimestamp(),
-      dataEntrega: null,
-    });
-
-    // Atualizar contador do projeto
-    const projetoRef = doc(db, 'projetos', doacaoData.projetoId);
-    await updateDoc(projetoRef, {
-      doacoesRecebidas: increment(1),
-      arrecadado: increment(doacaoData.quantidade || 1),
-    });
-
-    console.log('✅ Doação criada com ID:', docRef.id);
-    return docRef.id;
-  } catch (error) {
-    console.error('❌ Erro ao criar doação:', error);
-    throw error;
-  }
-};
-
-/**
  * Buscar doações de um projeto
  */
 export const buscarDoacoesProjeto = async (projetoId) => {
