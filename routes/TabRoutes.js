@@ -7,7 +7,7 @@ import Home from '../screens/Home';
 import Estatisticas from '../screens/Estatisticas';
 import Doar from '../screens/Doar';
 import Favoritos from '../screens/Favoritos';
-import Perfil from '../screens/perfilUser';
+import Perfil from '../screens/Perfil';
 
 import { cores } from '../components/Global';
 

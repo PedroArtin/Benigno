@@ -12,10 +12,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { fontes, cores } from '../components/Global';
 import { buscarProjetosAtivos } from '../services/projetosService';
 import { useFavoritos } from '../hooks/useFavoritos';
 import BotaoFavoritar from '../components/BotaoFavoritar';
+import FilterModal from '../components/FilterModal';
 
 let MapView, Marker, Callout;
 if (Platform.OS !== 'web') {

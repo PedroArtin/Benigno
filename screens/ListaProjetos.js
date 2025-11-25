@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../components/Global';
-import { buscarTodosProjetos } from '../services/projetosService';
+import { buscarProjetosAtivos } from '../services/projetosService';
 
 export default function ListaProjetos({ navigation }) {
   const [projetos, setProjetos] = useState([]);
@@ -25,7 +25,7 @@ export default function ListaProjetos({ navigation }) {
 
   const carregarProjetos = async () => {
     try {
-      const projetosData = await buscarTodosProjetos();
+      const projetosData = await buscarProjetosAtivos();
       setProjetos(projetosData);
     } catch (error) {
       console.error('Erro ao carregar projetos:', error);
@@ -51,7 +51,7 @@ export default function ListaProjetos({ navigation }) {
     return (
       <TouchableOpacity
         style={styles.projetoCard}
-        onPress={() => navigation.navigate('DetalhesProjeto', { projetoId: item.id })}
+        onPress={() => navigation.navigate('DetalhesProjeto', { projeto: item })}
       >
         {/* Imagem */}
         <Image
@@ -99,7 +99,7 @@ export default function ListaProjetos({ navigation }) {
           {/* Botão Ajudar */}
           <TouchableOpacity
             style={styles.ajudarBtn}
-            onPress={() => navigation.navigate('DetalhesProjeto', { projetoId: item.id })}
+            onPress={() => navigation.navigate('DetalhesProjeto', { projeto: item })}
           >
             <Ionicons name="heart-outline" size={20} color="#fff" />
             <Text style={styles.ajudarBtnText}>Quero Ajudar</Text>

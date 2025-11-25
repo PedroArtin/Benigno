@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../components/Global';
 import { salvarDoacao } from '../services/doacoesService';
+import { incrementarDoacoes } from '../authService';
 import { auth } from '../firebase/firebaseconfig';
 
 export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
@@ -111,6 +112,15 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
       const resultado = await salvarDoacao(dadosDoacao);
 
       if (resultado.success) {
+        // 🎯 INCREMENTAR PONTOS DO USUÁRIO
+        try {
+          await incrementarDoacoes(user.uid);
+          console.log('✅ Pontos adicionados: +10 pontos!');
+        } catch (error) {
+          console.error('⚠️ Erro ao adicionar pontos:', error);
+          // Não falha a doação se os pontos não forem adicionados
+        }
+
         Alert.alert(
           'Sucesso! 🎉',
           tipoEntrega === 'entrega'

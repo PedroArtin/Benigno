@@ -9,6 +9,7 @@ import {
   updateDoc,
   getDoc,
   Timestamp,
+  increment,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseconfig';
 
@@ -224,11 +225,31 @@ export const buscarMinhasDoacoes = async (doadorId) => {
 export const confirmarRecebimento = async (doacaoId) => {
   try {
     const doacaoRef = doc(db, 'doacoes', doacaoId);
+    
+    // Buscar dados da doação para obter projetoId
+    const doacaoSnap = await getDoc(doacaoRef);
+    if (!doacaoSnap.exists()) {
+      throw new Error('Doação não encontrada');
+    }
+    
+    const doacao = doacaoSnap.data();
+    const projetoId = doacao.projetoId;
+    
+    // Atualizar status da doação
     await updateDoc(doacaoRef, {
       status: 'recebida',
       dataRecebimento: Timestamp.now(),
       dataAtualizacao: Timestamp.now(),
     });
+    
+    // 🎯 INCREMENTAR CONTAGEM DE DOAÇÕES DO PROJETO
+    if (projetoId) {
+      const projetoRef = doc(db, 'projetos', projetoId);
+      await updateDoc(projetoRef, {
+        doacoesRecebidas: increment(1),
+      });
+      console.log('✅ doacoesRecebidas incrementada no projeto:', projetoId);
+    }
     
     console.log('✅ Doação confirmada como recebida');
     return { success: true };

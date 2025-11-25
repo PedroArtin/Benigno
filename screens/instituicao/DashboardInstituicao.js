@@ -1,4 +1,4 @@
-// screens/instituicao/DashboardInstituicao.js - COM BOTÕES NAS DOAÇÕES
+// screens/instituicao/DashboardInstituicao.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,15 +8,13 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { fontes, cores } from '../components/Global';
-import { auth, db } from '../firebase/firebaseconfig';
+import { fontes, cores } from '../../components/Global';
+import { auth, db } from '../../firebase/firebaseconfig';
 import { doc, getDoc } from 'firebase/firestore';
-import * as projetosService from '../services/projetosService';
-import * as doacoesService from '../services/doacoesService';
+import * as projetosService from '../../services/projetosService';
 
 const { width } = Dimensions.get('window');
 
@@ -30,20 +28,13 @@ export default function DashboardInstituicao({ navigation }) {
     doacoesMes: 0,
   });
   const [projetosRecentes, setProjetosRecentes] = useState([]);
-  const [doacoesPendentes, setDoacoesPendentes] = useState([]);
+  const [doacoesRecentes, setDoacoesRecentes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     carregarDados();
   }, []);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      carregarDados();
-    });
-    return unsubscribe;
-  }, [navigation]);
 
   const carregarDados = async () => {
     try {
@@ -60,27 +51,26 @@ export default function DashboardInstituicao({ navigation }) {
       // Carregar projetos
       const projetos = await projetosService.buscarProjetosInstituicao(user.uid);
       const projetosAtivos = projetos.filter(p => p.ativo);
-      setProjetosRecentes(projetos.slice(0, 3));
+      setProjetosRecentes(projetos.slice(0, 3)); // Últimos 3
 
       // Carregar doações
-      const doacoes = await doacoesService.buscarDoacoesPorInstituicao(user.uid);
-      const pendentes = doacoes.filter(d => d.status === 'pendente');
+      const doacoes = await projetosService.buscarDoacoesInstituicao(user.uid);
+      const doacoesPendentes = doacoes.filter(d => d.status === 'pendente');
       
       // Doações deste mês
       const mesAtual = new Date().getMonth();
       const doacoesMes = doacoes.filter(d => {
-        const dataDoa = d.dataCriacao?.toDate?.() || new Date(d.dataCriacao);
+        const dataDoa = d.dataDoacao?.toDate?.() || new Date(d.dataDoacao);
         return dataDoa.getMonth() === mesAtual;
       });
 
-      // Atualizar doações pendentes (mostrar até 3)
-      setDoacoesPendentes(pendentes.slice(0, 3));
+      setDoacoesRecentes(doacoes.slice(0, 5)); // Últimas 5
 
       setStats({
         totalProjetos: projetos.length,
         projetosAtivos: projetosAtivos.length,
         totalDoacoes: doacoes.length,
-        doacoesPendentes: pendentes.length,
+        doacoesPendentes: doacoesPendentes.length,
         doacoesMes: doacoesMes.length,
       });
     } catch (error) {
@@ -94,38 +84,6 @@ export default function DashboardInstituicao({ navigation }) {
   const onRefresh = () => {
     setRefreshing(true);
     carregarDados();
-  };
-
-  // ✅ FUNÇÃO PARA MARCAR COMO ENTREGUE
-  const marcarComoEntregue = async (doacao) => {
-    Alert.alert(
-      'Confirmar Entrega',
-      `Marcar doação de ${doacao.doadorNome || 'este doador'} como entregue?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sim, confirmar',
-          style: 'default',
-          onPress: async () => {
-            try {
-              console.log('✅ Marcando doação como recebida:', doacao.id);
-              
-              const resultado = await doacoesService.confirmarRecebimento(doacao.id);
-
-              if (resultado.success) {
-                Alert.alert('Sucesso! 🎉', 'Doação marcada como entregue!');
-                carregarDados(); // Recarregar dados
-              } else {
-                Alert.alert('Erro', resultado.error || 'Não foi possível confirmar');
-              }
-            } catch (error) {
-              console.error('❌ Erro ao confirmar:', error);
-              Alert.alert('Erro', 'Não foi possível confirmar a entrega');
-            }
-          },
-        },
-      ]
-    );
   };
 
   if (loading) {
@@ -154,7 +112,7 @@ export default function DashboardInstituicao({ navigation }) {
           </View>
           <TouchableOpacity
             style={styles.notificationBtn}
-            onPress={() => navigation.navigate('DoacoesRecebidas')}
+            onPress={() => {/* Notificações */}}
           >
             <Ionicons name="notifications-outline" size={26} color={cores.verdeEscuro} />
             {stats.doacoesPendentes > 0 && (
@@ -248,77 +206,26 @@ export default function DashboardInstituicao({ navigation }) {
           </View>
         </View>
 
-        {/* ✅ DOAÇÕES PENDENTES COM BOTÕES */}
+        {/* Doações Pendentes */}
         {stats.doacoesPendentes > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>⚠️ Doações Pendentes</Text>
               <TouchableOpacity onPress={() => navigation.navigate('DoacoesRecebidas')}>
-                <Text style={styles.seeAllBtn}>Ver todas ({stats.doacoesPendentes})</Text>
+                <Text style={styles.seeAllBtn}>Ver todas</Text>
               </TouchableOpacity>
             </View>
-
-            {doacoesPendentes.map((doacao) => (
-              <View key={doacao.id} style={styles.doacaoCard}>
-                {/* Header */}
-                <View style={styles.doacaoHeader}>
-                  <View style={styles.doacaoIconCircle}>
-                    <Ionicons name="person" size={20} color={cores.laranjaEscuro} />
-                  </View>
-                  <View style={styles.doacaoInfo}>
-                    <Text style={styles.doacaoDoador}>
-                      {doacao.doadorNome || 'Doador Anônimo'}
-                    </Text>
-                    <Text style={styles.doacaoProjeto} numberOfLines={1}>
-                      {doacao.projetoTitulo || 'Projeto sem título'}
-                    </Text>
-                  </View>
-                  <View style={styles.doacaoStatus}>
-                    <Ionicons name="time" size={16} color={cores.laranjaEscuro} />
-                  </View>
-                </View>
-
-                {/* Tipo de Entrega */}
-                <View style={styles.doacaoDetalhes}>
-                  <Ionicons
-                    name={doacao.tipoEntrega === 'entrega' ? 'home' : 'car'}
-                    size={14}
-                    color="#666"
-                  />
-                  <Text style={styles.doacaoTipo}>
-                    {doacao.tipoEntrega === 'entrega'
-                      ? 'Doador vai entregar'
-                      : 'Você deve coletar'}
-                  </Text>
-                </View>
-
-                {/* Itens (se houver) */}
-                {doacao.itens && doacao.itens.length > 0 && (
-                  <Text style={styles.doacaoItens} numberOfLines={1}>
-                    {doacao.itens.length} item(ns) doado(s)
-                  </Text>
-                )}
-
-                {/* Botões */}
-                <View style={styles.doacaoBotoes}>
-                  <TouchableOpacity
-                    style={styles.verDetalhesBtn}
-                    onPress={() => navigation.navigate('DoacoesRecebidas')}
-                  >
-                    <Text style={styles.verDetalhesBtnText}>Ver detalhes</Text>
-                  </TouchableOpacity>
-
-                  {/* ✅ BOTÃO FINALIZAR */}
-                  <TouchableOpacity
-                    style={styles.finalizarBtn}
-                    onPress={() => marcarComoEntregue(doacao)}
-                  >
-                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                    <Text style={styles.finalizarBtnText}>Finalizar</Text>
-                  </TouchableOpacity>
-                </View>
+            <View style={styles.alertCard}>
+              <Ionicons name="time" size={40} color={cores.laranjaEscuro} />
+              <View style={styles.alertContent}>
+                <Text style={styles.alertTitle}>
+                  {stats.doacoesPendentes} doação(ões) aguardando confirmação
+                </Text>
+                <Text style={styles.alertText}>
+                  Confira e confirme as entregas recebidas
+                </Text>
               </View>
-            ))}
+            </View>
           </View>
         )}
 
@@ -532,101 +439,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#333',
   },
-  // ✅ ESTILOS DOS CARDS DE DOAÇÃO
-  doacaoCard: {
-    backgroundColor: cores.brancoTexto,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: cores.laranjaEscuro,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  doacaoHeader: {
+  alertCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  doacaoIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: cores.laranjaClaro,
-    justifyContent: 'center',
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
-    marginRight: 12,
   },
-  doacaoInfo: {
+  alertContent: {
+    marginLeft: 15,
     flex: 1,
   },
-  doacaoDoador: {
+  alertTitle: {
     ...fontes.montserratBold,
     fontSize: 15,
-    color: '#333',
-    marginBottom: 2,
+    color: cores.laranjaEscuro,
+    marginBottom: 4,
   },
-  doacaoProjeto: {
+  alertText: {
     ...fontes.montserrat,
-    fontSize: 12,
-    color: '#666',
-  },
-  doacaoStatus: {
-    padding: 6,
-  },
-  doacaoDetalhes: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  doacaoTipo: {
-    ...fontes.montserrat,
-    fontSize: 12,
-    color: '#666',
-  },
-  doacaoItens: {
-    ...fontes.montserrat,
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 10,
-  },
-  doacaoBotoes: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  verDetalhesBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: cores.verdeEscuro,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verDetalhesBtnText: {
-    ...fontes.montserratMedium,
     fontSize: 13,
-    color: cores.verdeEscuro,
-  },
-  finalizarBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: cores.verdeEscuro,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  finalizarBtnText: {
-    ...fontes.montserratBold,
-    fontSize: 13,
-    color: '#fff',
+    color: '#666',
   },
   emptyState: {
     alignItems: 'center',

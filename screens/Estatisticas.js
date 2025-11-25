@@ -1,6 +1,6 @@
 // screens/Estatisticas.js - COM DADOS REAIS DO FIREBASE
 import React, { useEffect, useState } from 'react';
-import { fontes, cores } from "../components/Global";
+import { fontes, cores } from '../components/Global';
 import { 
   StyleSheet, 
   View, 
@@ -35,11 +35,18 @@ export default function Estatisticas() {
 
       console.log('📊 Carregando estatísticas...');
       const stats = await buscarEstatisticasDoacao(user.uid);
+      
+      if (!stats) {
+        console.log('⚠️ Nenhuma estatística retornada');
+        setLoading(false);
+        return;
+      }
+      
       setEstatisticas(stats);
 
       // Preparar dados para o gráfico de barras
       const cores_barras = ['#ff9800', '#90ab63', '#f57c00'];
-      const barData = Object.entries(stats.doacoesPorMes).map(([label, value], index) => ({
+      const barData = Object.entries(stats.doacoesPorMes || {}).map(([label, value], index) => ({
         value,
         label,
         frontColor: cores_barras[index % cores_barras.length],
