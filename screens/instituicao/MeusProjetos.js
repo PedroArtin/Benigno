@@ -46,7 +46,14 @@ export default function MeusProjetos({ navigation }) {
     try {
       setLoading(true);
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em MeusProjetos');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver seus projetos', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setLoading(false);
+        return;
+      }
 
       const projetosData = await projetosService.buscarProjetosInstituicao(user.uid);
       setProjetos(projetosData);

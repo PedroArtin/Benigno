@@ -27,7 +27,14 @@ export default function Notificacoes({ navigation }) {
   const carregarNotificacoes = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em Notificacoes instituição');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver notificações', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setLoading(false);
+        return;
+      }
 
       // Buscar doações recentes para criar notificações
       const doacoes = await projetosService.buscarDoacoesInstituicao(user.uid);

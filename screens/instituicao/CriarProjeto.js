@@ -41,6 +41,13 @@ export default function CriarProjeto({ navigation }) {
     setLoading(true);
     try {
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado em CriarProjeto instituição');
+        Alert.alert('Erro', 'Faça login para criar um projeto');
+        setLoading(false);
+        return;
+      }
+
       await projetosService.criarProjeto({
         titulo: titulo.trim(),
         descricao: descricao.trim(),

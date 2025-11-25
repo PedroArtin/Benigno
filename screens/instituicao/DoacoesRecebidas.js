@@ -38,7 +38,10 @@ export default function DoacoesRecebidas({ navigation }) {
       setRefreshing(true);
       const user = auth.currentUser;
       if (!user) {
-        Alert.alert('Erro', 'Você precisa estar logado');
+        console.warn('Usuário não autenticado em DoacoesRecebidas');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver as doações', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
         return;
       }
 

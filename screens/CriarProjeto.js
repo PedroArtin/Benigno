@@ -52,7 +52,10 @@ export default function CriarProjeto({ navigation }) {
   const carregarDadosInstituicao = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado ao carregar instituição em CriarProjeto');
+        return;
+      }
 
       const instRef = doc(db, 'instituicoes', user.uid);
       const instDoc = await getDoc(instRef);

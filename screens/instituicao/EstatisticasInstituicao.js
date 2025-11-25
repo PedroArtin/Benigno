@@ -40,7 +40,14 @@ export default function EstatisticasInstituicao({ navigation }) {
   const carregarEstatisticas = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em EstatisticasInstituicao');
+        Alert.alert('Erro', 'Faça login para ver as estatísticas', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setLoading(false);
+        return;
+      }
 
       // Carregar dados da instituição (pontuação)
       const instRef = doc(db, 'instituicoes', user.uid);

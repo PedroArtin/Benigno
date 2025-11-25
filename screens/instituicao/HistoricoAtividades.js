@@ -28,7 +28,14 @@ export default function HistoricoAtividades({ navigation }) {
   const carregarHistorico = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em HistoricoAtividades instituição');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver o histórico', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setLoading(false);
+        return;
+      }
 
       const projetos = await projetosService.buscarProjetosInstituicao(user.uid);
       const doacoes = await projetosService.buscarDoacoesInstituicao(user.uid);

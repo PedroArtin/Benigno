@@ -55,6 +55,9 @@ export default function Perfil({ navigation }) {
       
       if (!user) {
         console.error('❌ Nenhum usuário autenticado');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver seu perfil', [
+          { text: 'OK', onPress: () => navigation.replace('Login') },
+        ]);
         setErro('Usuário não autenticado');
         setLoading(false);
         return;
