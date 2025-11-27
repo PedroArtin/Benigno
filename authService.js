@@ -9,7 +9,7 @@ import {
   signInWithCredential,
   onAuthStateChanged
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { auth, db } from './firebase/firebaseconfig';
 import { useEffect, useState } from 'react';
 
@@ -265,21 +265,24 @@ export const updateUserStats = async (uid, stats) => {
 /**
  * Incrementar contador de doações
  * @param {string} uid - ID do usuário
+ * 
+ * IMPORTANTE: Usa FieldValue.increment() para evitar race conditions
+ * Adiciona +1 na totalDoacoes e +10 nos pontos
  */
 export const incrementarDoacoes = async (uid) => {
   try {
     const userDocRef = doc(db, 'usuarios', uid);
-    const userDoc = await getDoc(userDocRef);
     
-    if (userDoc.exists()) {
-      const currentDoacoes = userDoc.data().totalDoacoes || 0;
-      await updateDoc(userDocRef, {
-        totalDoacoes: currentDoacoes + 1,
-        pontos: (userDoc.data().pontos || 0) + 10,
-      });
-    }
+    // Usar increment() para evitar race conditions e garantir atomicidade
+    await updateDoc(userDocRef, {
+      totalDoacoes: increment(1),    // +1 doação
+      pontos: increment(10),         // +10 pontos
+    });
+    
+    console.log('✅ Doações e pontos incrementados para usuário:', uid);
+    return true;
   } catch (error) {
-    console.error('Erro ao incrementar doações:', error);
+    console.error('❌ Erro ao incrementar doações:', error);
     throw error;
   }
 };

@@ -1,4 +1,4 @@
-// screens/ListaDoacoes.js - COMPLETA COM CONFIRMAÇÃO
+// screens/ListaDoacoes.js - CORRIGIDO - Mostra doações de coleta
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -31,15 +31,34 @@ export default function ListaDoacoes({ instituicaoId }) {
     try {
       setRefreshing(true);
       console.log('📥 Carregando doações para instituição:', instituicaoId);
+      console.log('📊 Filtro ativo:', filtroStatus || 'Todas');
       
-      const dados = await doacoesService.buscarDoacoesInstituicao(
+      // 🔧 CORRIGIDO: Buscar TODAS as doações primeiro
+      const todasDoacoes = await doacoesService.buscarDoacoesInstituicao(
         instituicaoId,
-        filtroStatus
+        null // Sempre busca todas primeiro
       );
+      
+      console.log(`✅ ${todasDoacoes.length} doações encontradas no total`);
+      console.log('📋 Status das doações:', todasDoacoes.map(d => ({ id: d.id.slice(0, 6), status: d.status })));
+      
+      // 🔧 CORRIGIDO: Aplicar filtro localmente
+      let doacoesFiltradas = todasDoacoes;
+      
+      if (filtroStatus === 'pendentes') {
+        // 🆕 NOVO: Mostra AMBOS os status pendentes
+        doacoesFiltradas = todasDoacoes.filter(d => 
+          d.status === 'pendente' || d.status === 'pendente_busca'
+        );
+        console.log(`🔍 Filtro "Pendentes": ${doacoesFiltradas.length} doações (pendente + pendente_busca)`);
+      } else if (filtroStatus) {
+        doacoesFiltradas = todasDoacoes.filter(d => d.status === filtroStatus);
+        console.log(`🔍 Filtro "${filtroStatus}": ${doacoesFiltradas.length} doações`);
+      }
       
       // Enriquecer dados com informações do doador
       const doacoesEnriquecidas = await Promise.all(
-        dados.map(async (doacao) => {
+        doacoesFiltradas.map(async (doacao) => {
           try {
             if (doacao.doadorId) {
               const doadorRef = doc(db, 'usuarios', doacao.doadorId);
@@ -49,7 +68,7 @@ export default function ListaDoacoes({ instituicaoId }) {
                 const doadorData = doadorDoc.data();
                 return {
                   ...doacao,
-                  doadorNome: doadorData.nome || 'Usuário',
+                  doadorNome: doadorData.nome || doacao.doadorNome || 'Usuário',
                   doadorTelefone: doadorData.telefone || '',
                   doadorEmail: doadorData.email || '',
                 };
@@ -57,14 +76,25 @@ export default function ListaDoacoes({ instituicaoId }) {
             }
             return doacao;
           } catch (error) {
-            console.error('Erro ao buscar dados do doador:', error);
+            console.error('⚠️ Erro ao buscar dados do doador:', error);
             return doacao;
           }
         })
       );
       
       setDoacoes(doacoesEnriquecidas);
-      console.log(`✅ ${doacoesEnriquecidas.length} doações carregadas`);
+      console.log(`✅ ${doacoesEnriquecidas.length} doações carregadas e exibidas`);
+      
+      // 🆕 NOVO: Log detalhado da primeira doação (debug)
+      if (doacoesEnriquecidas.length > 0) {
+        console.log('🔍 Primeira doação (exemplo):', {
+          id: doacoesEnriquecidas[0].id,
+          status: doacoesEnriquecidas[0].status,
+          tipoEntrega: doacoesEnriquecidas[0].tipoEntrega,
+          doadorNome: doacoesEnriquecidas[0].doadorNome,
+          cep: doacoesEnriquecidas[0].cep,
+        });
+      }
     } catch (error) {
       console.error('❌ Erro ao carregar doações:', error);
       Alert.alert('Erro', 'Não foi possível carregar as doações');
@@ -72,6 +102,39 @@ export default function ListaDoacoes({ instituicaoId }) {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // 🆕 NOVA FUNÇÃO: Confirmar busca da doação
+  const confirmarBusca = async (doacaoId) => {
+    Alert.alert(
+      'Confirmar Busca',
+      'Confirma que você foi buscar esta doação no endereço do doador?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, busquei',
+          onPress: async () => {
+            try {
+              console.log('🚗 Confirmando busca da doação:', doacaoId);
+              const resultado = await doacoesService.confirmarBuscaDoacao(doacaoId);
+              
+              if (resultado.success) {
+                Alert.alert(
+                  'Sucesso! 🎉', 
+                  'Busca confirmada! O doador receberá uma notificação para confirmar.'
+                );
+                carregarDoacoes();
+              } else {
+                Alert.alert('Erro', 'Não foi possível confirmar a busca');
+              }
+            } catch (error) {
+              console.error('❌ Erro ao confirmar busca:', error);
+              Alert.alert('Erro', 'Não foi possível confirmar a busca');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const confirmarRecebimento = async (doacaoId) => {
@@ -88,7 +151,7 @@ export default function ListaDoacoes({ instituicaoId }) {
               
               if (resultado.success) {
                 Alert.alert('Sucesso', 'Doação confirmada como recebida!');
-                carregarDoacoes(); // Recarregar lista
+                carregarDoacoes();
               } else {
                 Alert.alert('Erro', 'Não foi possível confirmar o recebimento');
               }
@@ -141,6 +204,18 @@ export default function ListaDoacoes({ instituicaoId }) {
         bg: cores.laranjaClaro,
         icon: 'time',
       },
+      pendente_busca: { // 🆕 NOVO STATUS
+        label: '🚗 Aguardando Busca',
+        color: '#F57C00',
+        bg: '#FFF3E0',
+        icon: 'car',
+      },
+      buscado: { // 🆕 NOVO STATUS
+        label: '✅ Busca Realizada',
+        color: '#1976D2',
+        bg: '#E3F2FD',
+        icon: 'checkmark-done',
+      },
       aguardando_confirmacao: {
         label: 'Aguardando Confirmação',
         color: '#1976D2',
@@ -148,7 +223,7 @@ export default function ListaDoacoes({ instituicaoId }) {
         icon: 'hourglass',
       },
       aguardando_confirmacao_usuario: {
-        label: '⏳ Aguardando Usuário',
+        label: '⏳ Aguardando Doador',
         color: '#F57C00',
         bg: '#FFF3E0',
         icon: 'alert-circle',
@@ -158,6 +233,12 @@ export default function ListaDoacoes({ instituicaoId }) {
         color: '#388E3C',
         bg: cores.verdeClaro,
         icon: 'checkmark-circle',
+      },
+      coleta_nao_confirmada: { // 🆕 NOVO STATUS
+        label: '❌ Não Confirmada',
+        color: '#D32F2F',
+        bg: '#FFEBEE',
+        icon: 'alert-circle',
       },
       cancelada: {
         label: 'Cancelada',
@@ -208,6 +289,19 @@ export default function ListaDoacoes({ instituicaoId }) {
             </Text>
           </View>
 
+          {/* 🆕 NOVO: Mostrar CEP se for coleta */}
+          {item.tipoEntrega === 'coleta' && item.cep && (
+            <View style={styles.infoRow}>
+              <Ionicons name="location" size={16} color="#666" />
+              <Text style={styles.infoLabel}>CEP:</Text>
+              <Text style={styles.infoValue}>
+                {item.cep.length === 8 
+                  ? `${item.cep.slice(0,5)}-${item.cep.slice(5)}` 
+                  : item.cep}
+              </Text>
+            </View>
+          )}
+
           {item.doadorTelefone && (
             <View style={styles.infoRow}>
               <Ionicons name="call" size={16} color="#666" />
@@ -238,6 +332,17 @@ export default function ListaDoacoes({ instituicaoId }) {
 
         {/* Ações */}
         <View style={styles.cardActions}>
+          {/* 🆕 NOVO: Botão para confirmar busca */}
+          {item.status === 'pendente_busca' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.buscarBtn]}
+              onPress={() => confirmarBusca(item.id)}
+            >
+              <Ionicons name="car" size={18} color="#fff" />
+              <Text style={styles.actionBtnText}>Confirmar que Busquei</Text>
+            </TouchableOpacity>
+          )}
+
           {item.status === 'aguardando_confirmacao' && (
             <TouchableOpacity
               style={[styles.actionBtn, styles.confirmBtn]}
@@ -258,11 +363,21 @@ export default function ListaDoacoes({ instituicaoId }) {
             </TouchableOpacity>
           )}
           
-          {item.status === 'aguardando_confirmacao_usuario' && (
+          {/* 🆕 NOVO: Aviso quando aguardando usuário ou não confirmada */}
+          {item.status === 'buscado' && (
             <View style={styles.avisoBox}>
-              <Ionicons name="information-circle" size={20} color="#F57C00" />
+              <Ionicons name="information-circle" size={20} color="#1976D2" />
               <Text style={styles.avisoText}>
-                Aguardando o usuário confirmar que você coletou
+                Aguardando doador confirmar que você buscou
+              </Text>
+            </View>
+          )}
+          
+          {item.status === 'coleta_nao_confirmada' && (
+            <View style={[styles.avisoBox, { backgroundColor: '#FFEBEE' }]}>
+              <Ionicons name="alert-circle" size={20} color="#D32F2F" />
+              <Text style={[styles.avisoText, { color: '#D32F2F' }]}>
+                Doador informou que coleta não foi realizada
               </Text>
             </View>
           )}
@@ -287,15 +402,19 @@ export default function ListaDoacoes({ instituicaoId }) {
       <Text style={styles.emptyTitle}>Nenhuma doação</Text>
       <Text style={styles.emptyText}>
         {filtroStatus
-          ? `Nenhuma doação com status "${getStatusInfo(filtroStatus).label}"`
+          ? `Nenhuma doação com status "${filtroStatus === 'pendentes' ? 'Pendente' : getStatusInfo(filtroStatus).label}"`
           : 'Ainda não há doações para esta instituição'}
+      </Text>
+      {/* 🆕 NOVO: Dica para debug */}
+      <Text style={styles.debugText}>
+        💡 Verifique o console (F12) para logs detalhados
       </Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      {/* Filtros */}
+      {/* Filtros - 🔧 CORRIGIDO */}
       <View style={styles.filtrosContainer}>
         <TouchableOpacity
           style={[styles.filtroChip, !filtroStatus && styles.filtroAtivo]}
@@ -306,17 +425,18 @@ export default function ListaDoacoes({ instituicaoId }) {
           </Text>
         </TouchableOpacity>
 
+        {/* 🔧 CORRIGIDO: Mudou de 'pendente' para 'pendentes' */}
         <TouchableOpacity
           style={[
             styles.filtroChip,
-            filtroStatus === 'pendente' && styles.filtroAtivo,
+            filtroStatus === 'pendentes' && styles.filtroAtivo,
           ]}
-          onPress={() => setFiltroStatus('pendente')}
+          onPress={() => setFiltroStatus('pendentes')}
         >
           <Text
             style={[
               styles.filtroText,
-              filtroStatus === 'pendente' && styles.filtroTextAtivo,
+              filtroStatus === 'pendentes' && styles.filtroTextAtivo,
             ]}
           >
             Pendentes
@@ -371,7 +491,7 @@ export default function ListaDoacoes({ instituicaoId }) {
         }
       />
 
-      {/* Modal de Detalhes */}
+      {/* Modal de Detalhes - MESMA COISA, não muda */}
       {modalDetalhes && (
         <Modal
           visible={!!modalDetalhes}
@@ -414,6 +534,18 @@ export default function ListaDoacoes({ instituicaoId }) {
                     {modalDetalhes.doadorNome || 'Não informado'}
                   </Text>
                 </View>
+
+                {/* 🆕 NOVO: Mostrar CEP no modal */}
+                {modalDetalhes.tipoEntrega === 'coleta' && modalDetalhes.cep && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>CEP:</Text>
+                    <Text style={styles.detailValue}>
+                      {modalDetalhes.cep.length === 8 
+                        ? `${modalDetalhes.cep.slice(0,5)}-${modalDetalhes.cep.slice(5)}` 
+                        : modalDetalhes.cep}
+                    </Text>
+                  </View>
+                )}
 
                 {modalDetalhes.doadorTelefone && (
                   <View style={styles.detailRow}>
@@ -466,6 +598,19 @@ export default function ListaDoacoes({ instituicaoId }) {
                   </View>
                 )}
               </View>
+
+              {modalDetalhes.status === 'pendente_busca' && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.buscarBtn, { marginTop: 15 }]}
+                  onPress={() => {
+                    setModalDetalhes(null);
+                    confirmarBusca(modalDetalhes.id);
+                  }}
+                >
+                  <Ionicons name="car" size={18} color="#fff" />
+                  <Text style={styles.actionBtnText}>Confirmar que Busquei</Text>
+                </TouchableOpacity>
+              )}
 
               {modalDetalhes.status === 'aguardando_confirmacao' && (
                 <TouchableOpacity
@@ -619,6 +764,9 @@ const styles = StyleSheet.create({
   coletarBtn: {
     backgroundColor: cores.laranjaEscuro,
   },
+  buscarBtn: { // 🆕 NOVO
+    backgroundColor: '#F57C00',
+  },
   detailsBtn: {
     backgroundColor: cores.verdeClaro,
   },
@@ -630,7 +778,7 @@ const styles = StyleSheet.create({
   avisoBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF3E0',
+    backgroundColor: '#E3F2FD',
     padding: 12,
     borderRadius: 8,
     gap: 8,
@@ -639,7 +787,7 @@ const styles = StyleSheet.create({
   avisoText: {
     ...fontes.montserrat,
     fontSize: 12,
-    color: '#F57C00',
+    color: '#1976D2',
     flex: 1,
   },
   emptyContainer: {
@@ -657,6 +805,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  debugText: { // 🆕 NOVO
+    ...fontes.montserrat,
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   modalOverlay: {
     flex: 1,

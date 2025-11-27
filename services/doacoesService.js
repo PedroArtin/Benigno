@@ -1,4 +1,6 @@
-// services/doacoesService.js - VERSÃO FINAL SEM ERRO DE ÍNDICE
+// services/doacoesService.js - VERSÃO COMPLETA E PRONTA
+// ✅ COPIE E COLE ESTE ARQUIVO SUBSTITUINDO O SEU doacoesService.js
+
 import { 
   collection, 
   addDoc, 
@@ -12,10 +14,11 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseconfig';
+import { criarNotificacaoConfirmacaoColetaUsuario } from './notificacoesService'; // 🆕 NOVO IMPORT
 
-// ============================================
-// CRIAR/SALVAR DOAÇÃO
-// ============================================
+// ═════════════════════════════════════════════════════════════
+// CRIAR/SALVAR DOAÇÃO (já existiam)
+// ═════════════════════════════════════════════════════════════
 
 /**
  * Salvar nova doação (usado pelo FormularioDoacao)
@@ -56,16 +59,15 @@ export const criarDoacao = async (doacaoData) => {
   }
 };
 
-// ============================================
+// ═════════════════════════════════════════════════════════════
 // BUSCAR DOAÇÕES (SEM ORDERBY - NÃO PRECISA ÍNDICE)
-// ============================================
+// ═════════════════════════════════════════════════════════════
 
 /**
  * Buscar doações por instituição
  */
 export const buscarDoacoesPorInstituicao = async (instituicaoId) => {
   try {
-    // REMOVIDO orderBy para não precisar de índice
     const q = query(
       collection(db, 'doacoes'),
       where('instituicaoId', '==', instituicaoId)
@@ -77,11 +79,11 @@ export const buscarDoacoesPorInstituicao = async (instituicaoId) => {
       ...doc.data(),
     }));
     
-    // ORDENAR NO CLIENTE (não precisa de índice)
+    // Ordenar no cliente (não precisa de índice)
     doacoes.sort((a, b) => {
       const dateA = a.dataCriacao?.toDate?.() || new Date(a.dataCriacao || 0);
       const dateB = b.dataCriacao?.toDate?.() || new Date(b.dataCriacao || 0);
-      return dateB - dateA; // Mais recente primeiro
+      return dateB - dateA;
     });
     
     console.log(`✅ ${doacoes.length} doações encontradas para instituição`);
@@ -99,7 +101,6 @@ export const buscarDoacoesInstituicao = async (instituicaoId, statusFiltro = nul
   try {
     let q;
 
-    // REMOVIDO orderBy para não precisar de índice
     if (statusFiltro) {
       q = query(
         collection(db, 'doacoes'),
@@ -123,11 +124,11 @@ export const buscarDoacoesInstituicao = async (instituicaoId, statusFiltro = nul
       });
     });
 
-    // ORDENAR NO CLIENTE (não precisa de índice)
+    // Ordenar no cliente
     doacoes.sort((a, b) => {
       const dateA = a.dataCriacao?.toDate?.() || new Date(a.dataCriacao || 0);
       const dateB = b.dataCriacao?.toDate?.() || new Date(b.dataCriacao || 0);
-      return dateB - dateA; // Mais recente primeiro
+      return dateB - dateA;
     });
 
     console.log(`✅ ${doacoes.length} doações encontradas e ordenadas`);
@@ -143,7 +144,6 @@ export const buscarDoacoesInstituicao = async (instituicaoId, statusFiltro = nul
  */
 export const buscarDoacoesRecentes = async (instituicaoId) => {
   try {
-    // REMOVIDO orderBy e limit, vamos ordenar no cliente
     const q = query(
       collection(db, 'doacoes'),
       where('instituicaoId', '==', instituicaoId)
@@ -159,14 +159,13 @@ export const buscarDoacoesRecentes = async (instituicaoId) => {
       });
     });
 
-    // ORDENAR NO CLIENTE e pegar só as 10 mais recentes
+    // Ordenar no cliente e pegar só as 10 mais recentes
     doacoes.sort((a, b) => {
       const dateA = a.dataCriacao?.toDate?.() || new Date(a.dataCriacao || 0);
       const dateB = b.dataCriacao?.toDate?.() || new Date(b.dataCriacao || 0);
       return dateB - dateA;
     });
 
-    // Retornar só as 10 primeiras
     const doacoesRecentes = doacoes.slice(0, 10);
     console.log(`✅ ${doacoesRecentes.length} doações recentes encontradas`);
     return doacoesRecentes;
@@ -181,7 +180,6 @@ export const buscarDoacoesRecentes = async (instituicaoId) => {
  */
 export const buscarDoacoesPorDoador = async (doadorId) => {
   try {
-    // REMOVIDO orderBy para não precisar de índice
     const q = query(
       collection(db, 'doacoes'),
       where('doadorId', '==', doadorId)
@@ -193,11 +191,11 @@ export const buscarDoacoesPorDoador = async (doadorId) => {
       ...doc.data(),
     }));
     
-    // ORDENAR NO CLIENTE (não precisa de índice)
+    // Ordenar no cliente
     doacoes.sort((a, b) => {
       const dateA = a.dataCriacao?.toDate?.() || new Date(a.dataCriacao || 0);
       const dateB = b.dataCriacao?.toDate?.() || new Date(b.dataCriacao || 0);
-      return dateB - dateA; // Mais recente primeiro
+      return dateB - dateA;
     });
     
     console.log(`✅ ${doacoes.length} doações do usuário encontradas`);
@@ -215,9 +213,9 @@ export const buscarMinhasDoacoes = async (doadorId) => {
   return buscarDoacoesPorDoador(doadorId);
 };
 
-// ============================================
-// ATUALIZAR STATUS
-// ============================================
+// ═════════════════════════════════════════════════════════════
+// ATUALIZAR STATUS (já existiam)
+// ═════════════════════════════════════════════════════════════
 
 /**
  * Confirmar recebimento da doação
@@ -226,7 +224,6 @@ export const confirmarRecebimento = async (doacaoId) => {
   try {
     const doacaoRef = doc(db, 'doacoes', doacaoId);
     
-    // Buscar dados da doação para obter projetoId e instituicaoId
     const doacaoSnap = await getDoc(doacaoRef);
     if (!doacaoSnap.exists()) {
       throw new Error('Doação não encontrada');
@@ -236,14 +233,12 @@ export const confirmarRecebimento = async (doacaoId) => {
     const projetoId = doacao.projetoId;
     const instituicaoId = doacao.instituicaoId;
     
-    // Atualizar status da doação
     await updateDoc(doacaoRef, {
       status: 'recebida',
       dataRecebimento: Timestamp.now(),
       dataAtualizacao: Timestamp.now(),
     });
     
-    // 🎯 INCREMENTAR CONTAGEM DE DOAÇÕES DO PROJETO
     if (projetoId) {
       const projetoRef = doc(db, 'projetos', projetoId);
       await updateDoc(projetoRef, {
@@ -252,7 +247,6 @@ export const confirmarRecebimento = async (doacaoId) => {
       console.log('✅ doacoesRecebidas incrementada no projeto:', projetoId);
     }
     
-    // 🎯 INCREMENTAR PONTOS DA INSTITUIÇÃO (+10 PONTOS POR DOAÇÃO RECEBIDA)
     if (instituicaoId) {
       const instRef = doc(db, 'instituicoes', instituicaoId);
       await updateDoc(instRef, {
@@ -270,13 +264,117 @@ export const confirmarRecebimento = async (doacaoId) => {
 };
 
 /**
+ * Buscar doações pendentes de busca pela ONG
+ */
+export const buscarDoacoesPendenteBusca = async (instituicaoId) => {
+  try {
+    const q = query(
+      collection(db, 'doacoes'),
+      where('instituicaoId', '==', instituicaoId),
+      where('status', '==', 'pendente_busca')
+    );
+    
+    const snapshot = await getDocs(q);
+    const doacoes = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    
+    doacoes.sort((a, b) => {
+      const dateA = a.dataCriacao?.toDate?.() || new Date(a.dataCriacao || 0);
+      const dateB = b.dataCriacao?.toDate?.() || new Date(b.dataCriacao || 0);
+      return dateB - dateA;
+    });
+    
+    console.log(`✅ ${doacoes.length} doações pendentes de busca encontradas`);
+    return doacoes;
+  } catch (error) {
+    console.error('❌ Erro ao buscar doações pendentes de busca:', error);
+    return [];
+  }
+};
+
+/**
+ * 🔄 MODIFICADO: Confirmar que a ONG fez a busca
+ * Agora envia notificação para o usuário confirmar
+ */
+export const confirmarBuscaDoacao = async (doacaoId) => {
+  try {
+    const doacaoRef = doc(db, 'doacoes', doacaoId);
+    
+    // Buscar dados da doação
+    const doacaoSnap = await getDoc(doacaoRef);
+    if (!doacaoSnap.exists()) {
+      throw new Error('Doação não encontrada');
+    }
+    
+    const doacao = doacaoSnap.data();
+    const projetoId = doacao.projetoId;
+    const instituicaoId = doacao.instituicaoId;
+    const doadorId = doacao.doadorId;
+    
+    // Atualizar status para 'buscado'
+    await updateDoc(doacaoRef, {
+      status: 'buscado',
+      dataBusca: Timestamp.now(),
+      dataAtualizacao: Timestamp.now(),
+    });
+    
+    // Incrementar contagem de doações do projeto
+    if (projetoId) {
+      const projetoRef = doc(db, 'projetos', projetoId);
+      await updateDoc(projetoRef, {
+        doacoesRecebidas: increment(1),
+      });
+      console.log('✅ doacoesRecebidas incrementada no projeto:', projetoId);
+    }
+    
+    // Incrementar pontos da instituição
+    if (instituicaoId) {
+      const instRef = doc(db, 'instituicoes', instituicaoId);
+      await updateDoc(instRef, {
+        pontos: increment(10),
+      });
+      console.log('✅ +10 pontos adicionados à instituição:', instituicaoId);
+    }
+    
+    // 🆕 NOVO: Criar notificação para o doador confirmar
+    try {
+      // Buscar nome da instituição
+      const instDoc = await getDoc(doc(db, 'instituicoes', instituicaoId));
+      const instituicaoNome = instDoc.exists() ? instDoc.data().nome : 'Instituição';
+      
+      await criarNotificacaoConfirmacaoColetaUsuario({
+        doadorId: doadorId,
+        instituicaoId: instituicaoId,
+        instituicaoNome: instituicaoNome,
+        doacaoId: doacaoId,
+        projetoId: projetoId,
+        projetoTitulo: doacao.projetoTitulo || 'Projeto',
+      });
+      
+      console.log('✅ Notificação de confirmação enviada ao doador');
+    } catch (notifError) {
+      console.error('⚠️ Erro ao criar notificação (não crítico):', notifError);
+      // Não falhar a operação se notificação falhar
+    }
+    
+    console.log('✅ Doação confirmada como buscada');
+    return { success: true, doadorId };
+  } catch (error) {
+    console.error('❌ Erro ao confirmar busca:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Marcar doação como coletada (ONG coletou, aguarda confirmação do usuário)
  */
 export const marcarComoColetado = async (doacaoId, instituicaoId) => {
   try {
     const doacaoRef = doc(db, 'doacoes', doacaoId);
     await updateDoc(doacaoRef, {
-      status: 'aguardando_confirmacao_usuario', // 🆕 Aguarda usuário confirmar
+      status: 'aguardando_confirmacao_usuario',
       dataColeta: Timestamp.now(),
       dataAtualizacao: Timestamp.now(),
     });
@@ -290,13 +388,12 @@ export const marcarComoColetado = async (doacaoId, instituicaoId) => {
 };
 
 /**
- * 🆕 Usuário confirma que a ONG realmente coletou a doação
+ * Usuário confirma que a ONG realmente coletou a doação
  */
 export const confirmarColetaPeloUsuario = async (doacaoId, usuarioId) => {
   try {
     const doacaoRef = doc(db, 'doacoes', doacaoId);
     
-    // Verificar se a doação pertence ao usuário
     const doacaoDoc = await getDoc(doacaoRef);
     if (!doacaoDoc.exists()) {
       throw new Error('Doação não encontrada');
@@ -311,7 +408,6 @@ export const confirmarColetaPeloUsuario = async (doacaoId, usuarioId) => {
       throw new Error('Esta doação não está aguardando confirmação');
     }
     
-    // Confirmar coleta
     await updateDoc(doacaoRef, {
       status: 'recebida',
       dataConfirmacaoUsuario: Timestamp.now(),
@@ -367,9 +463,9 @@ export const cancelarDoacao = async (doacaoId, instituicaoId = null, motivo = ''
   }
 };
 
-// ============================================
-// DETALHES
-// ============================================
+// ═════════════════════════════════════════════════════════════
+// DETALHES E ESTATÍSTICAS (já existiam)
+// ═════════════════════════════════════════════════════════════
 
 /**
  * Buscar detalhes de uma doação
@@ -392,10 +488,6 @@ export const buscarDetalhesDoacao = async (doacaoId) => {
     return null;
   }
 };
-
-// ============================================
-// ESTATÍSTICAS
-// ============================================
 
 /**
  * Buscar estatísticas das doações
@@ -434,4 +526,27 @@ export const buscarEstatisticasDoacoes = async (instituicaoId) => {
       mesAtual: 0,
     };
   }
+};
+
+// ═════════════════════════════════════════════════════════════
+// 🆕 NOVA SEÇÃO: VALIDAÇÃO DE CEP
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * 🆕 NOVO: Validar formato de CEP (8 dígitos)
+ */
+export const validarCEP = (cep) => {
+  const cepLimpo = cep.replace(/\D/g, '');
+  return cepLimpo.length === 8;
+};
+
+/**
+ * 🆕 NOVO: Formatar CEP com hífen (00000-000)
+ */
+export const formatarCEP = (text) => {
+  const numeros = text.replace(/\D/g, '');
+  if (numeros.length <= 5) {
+    return numeros;
+  }
+  return `${numeros.slice(0, 5)}-${numeros.slice(5, 8)}`;
 };

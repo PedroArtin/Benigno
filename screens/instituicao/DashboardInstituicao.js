@@ -17,6 +17,8 @@ import NavbarDashboard from '../../components/navbarDashboard';
 import { auth, db } from '../../firebase/firebaseconfig';
 import { doc, getDoc } from 'firebase/firestore';
 import * as projetosService from '../../services/projetosService';
+import * as doacoesService from '../../services/doacoesService';
+import * as notificacoesService from '../../services/notificacoesService';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +33,7 @@ export default function DashboardInstituicao({ navigation }) {
   });
   const [projetosRecentes, setProjetosRecentes] = useState([]);
   const [doacoesRecentes, setDoacoesRecentes] = useState([]);
+  const [doacoesColeta, setDoacoesColeta] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -65,6 +68,10 @@ export default function DashboardInstituicao({ navigation }) {
       const doacoes = await projetosService.buscarDoacoesInstituicao(user.uid);
       const doacoesPendentes = doacoes.filter(d => d.status === 'pendente');
       
+      // Carregar doações de coleta pendente (a ONG precisa buscar)
+      const doacoesColetaPendente = await doacoesService.buscarDoacoesInstituicao(user.uid, 'coleta_pendente');
+      setDoacoesColeta(doacoesColetaPendente);
+      
       // Doações deste mês
       const mesAtual = new Date().getMonth();
       const doacoesMes = doacoes.filter(d => {
@@ -92,6 +99,37 @@ export default function DashboardInstituicao({ navigation }) {
   const onRefresh = () => {
     setRefreshing(true);
     carregarDados();
+  };
+
+  const handleConfirmarBusca = async (doacaoId) => {
+    try {
+      // Buscar informações da doação para notificar o doador
+      const doacaoRef = doc(db, 'doacoes', doacaoId);
+      const doacaoSnap = await getDoc(doacaoRef);
+      const doacaoData = doacaoSnap.data();
+
+      // Confirmar a busca
+      const resultado = await doacoesService.confirmarBuscaDoacao(doacaoId);
+      
+      if (resultado.success) {
+        // Criar notificação para o doador
+        if (doacaoData?.doadorId) {
+          await notificacoesService.criarNotificacaoOngBuscou(
+            doacaoData.doadorId,
+            instituicao?.nome || 'ONG',
+            doacaoId
+          );
+        }
+        
+        Alert.alert('Sucesso! 🎉', 'Busca confirmada! Doador notificado.');
+        carregarDados(); // Recarregar dados
+      } else {
+        Alert.alert('Erro', 'Não foi possível confirmar a busca');
+      }
+    } catch (error) {
+      console.error('Erro ao confirmar busca:', error);
+      Alert.alert('Erro', 'Ocorreu um erro ao confirmar a busca');
+    }
   };
 
   if (loading) {
@@ -236,6 +274,54 @@ export default function DashboardInstituicao({ navigation }) {
                 </Text>
               </View>
             </View>
+          </View>
+        )}
+
+        {/* Doações para Coleta (Pendentes de Busca) */}
+        {doacoesColeta.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🚚 Doações para Coletar</Text>
+              <Text style={styles.seeAllBtn}>{doacoesColeta.length}</Text>
+            </View>
+            
+            {doacoesColeta.map((doacao) => (
+              <View key={doacao.id} style={styles.coletaCard}>
+                <View style={styles.coletaHeader}>
+                  <View style={[styles.coletaIcon, { backgroundColor: cores.verdeClaro }]}>
+                    <Ionicons name="car" size={24} color={cores.verdeEscuro} />
+                  </View>
+                  <View style={styles.coletaInfo}>
+                    <Text style={styles.coletaTitulo} numberOfLines={2}>
+                      {doacao.endereco}, {doacao.numero}
+                    </Text>
+                    <Text style={styles.coletaSubtitulo} numberOfLines={1}>
+                      {doacao.cidade}, {doacao.estado} - CEP: {doacao.cep}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.coletaItens}>
+                  <Text style={styles.coletaItensTitle}>Itens ({doacao.itens?.length || 0}):</Text>
+                  {doacao.itens?.slice(0, 2).map((item, idx) => (
+                    <Text key={idx} style={styles.coletaItem}>
+                      • {item.quantidade}x {item.categoria}
+                    </Text>
+                  ))}
+                  {doacao.itens?.length > 2 && (
+                    <Text style={styles.coletaItem}>• +{doacao.itens.length - 2} itens</Text>
+                  )}
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.botaoConfirmarBusca}
+                  onPress={() => handleConfirmarBusca(doacao.id)}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={styles.botaoConfirmarBuscaText}>Confirmar Busca</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         )}
 
@@ -470,6 +556,79 @@ const styles = StyleSheet.create({
     ...fontes.montserrat,
     fontSize: 13,
     color: '#666',
+  },
+  coletaCard: {
+    backgroundColor: cores.brancoTexto,
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: cores.verdeEscuro,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  coletaHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  coletaIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  coletaInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  coletaTitulo: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  coletaSubtitulo: {
+    ...fontes.montserrat,
+    fontSize: 12,
+    color: '#999',
+  },
+  coletaItens: {
+    backgroundColor: '#F9F9F9',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  coletaItensTitle: {
+    ...fontes.montserratBold,
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  coletaItem: {
+    ...fontes.montserrat,
+    fontSize: 12,
+    color: '#777',
+    marginBottom: 3,
+  },
+  botaoConfirmarBusca: {
+    backgroundColor: cores.verdeEscuro,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  botaoConfirmarBuscaText: {
+    ...fontes.montserratBold,
+    fontSize: 14,
+    color: '#fff',
   },
   emptyState: {
     alignItems: 'center',

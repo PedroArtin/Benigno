@@ -1,4 +1,4 @@
-// screens/Home.js - COMPLETO COM FAVORITOS E NAVEGAÇÃO CORRIGIDA
+// screens/Home.js - COMPLETO COM FAVORITOS, NOTIFICAÇÕES E NAVEGAÇÃO CORRIGIDA
 import React, { useState, useEffect } from 'react';
 import { fontes, cores } from "../components/Global";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { buscarProjetosAtivos } from '../services/projetosService';
 import { useFavoritos } from '../hooks/useFavoritos';
 import BotaoFavoritar from '../components/BotaoFavoritar';
+import NotificacoesBadge from '../components/NotificacoesBadge';
 
 const { width } = Dimensions.get("window");
 
@@ -97,20 +98,23 @@ export default function Home({ navigation }) {
               </View>
             </View>
             
-            {/* Botão Favoritos com Badge */}
-            <TouchableOpacity 
-              style={style.favoritosBtn}
-              onPress={() => navigation.navigate('Favoritos')}
-            >
-              <Ionicons name="heart" size={24} color={cores.brancoTexto} />
-              {totalFavoritos > 0 && (
-                <View style={style.favoritosBadge}>
-                  <Text style={style.favoritosBadgeText}>
-                    {totalFavoritos > 9 ? '9+' : totalFavoritos}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {/* Botões de ações - Notificações e Favoritos */}
+            <View style={style.headerButtons}>
+              <NotificacoesBadge navigation={navigation} />
+              <TouchableOpacity 
+                style={style.favoritosBtn}
+                onPress={() => navigation.navigate('Favoritos')}
+              >
+                <Ionicons name="heart" size={24} color={cores.brancoTexto} />
+                {totalFavoritos > 0 && (
+                  <View style={style.favoritosBadge}>
+                    <Text style={style.favoritosBadgeText}>
+                      {totalFavoritos > 9 ? '9+' : totalFavoritos}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={style.pesquisa}>
@@ -269,6 +273,10 @@ const style = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     flexDirection: "row",
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   localizacao: {
     flexDirection: "row",
