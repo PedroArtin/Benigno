@@ -29,6 +29,9 @@ export default function Estatisticas() {
       const user = auth.currentUser;
       if (!user) {
         console.log('⚠️ Usuário não autenticado');
+        Alert.alert('Erro', 'Faça login para ver suas estatísticas', [
+          { text: 'OK', onPress: () => navigation?.replace?.('Login') },
+        ]);
         setLoading(false);
         return;
       }

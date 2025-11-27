@@ -55,6 +55,9 @@ export default function Perfil({ navigation }) {
       
       if (!user) {
         console.error('❌ Nenhum usuário autenticado');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver seu perfil', [
+          { text: 'OK', onPress: () => navigation.replace('Login') },
+        ]);
         setErro('Usuário não autenticado');
         setLoading(false);
         return;
@@ -327,21 +330,6 @@ export default function Perfil({ navigation }) {
                 color={cores.verdeEscuro} 
               />
               <Text style={styles.menuItemText}>Editar Perfil</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('Enderecos')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons 
-                name="location-outline" 
-                size={24} 
-                color={cores.verdeEscuro} 
-              />
-              <Text style={styles.menuItemText}>Endereços</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>

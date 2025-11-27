@@ -61,6 +61,13 @@ export default function Privacidade({ navigation }) {
     setSalvando(true);
     try {
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao salvar configurações de privacidade');
+        Alert.alert('Sessão expirada', 'Faça login novamente para salvar as configurações');
+        setSalvando(false);
+        return;
+      }
+
       await atualizarPerfil(user.uid, {
         privacidade: novasConfiguracoes,
       });

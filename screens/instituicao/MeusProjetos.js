@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
+import NavbarDashboard from '../../components/navbarDashboard';
 import { auth } from '../../firebase/firebaseconfig';
 import * as projetosService from '../../services/projetosService';
 
@@ -45,7 +46,14 @@ export default function MeusProjetos({ navigation }) {
     try {
       setLoading(true);
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em MeusProjetos');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver seus projetos', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setLoading(false);
+        return;
+      }
 
       const projetosData = await projetosService.buscarProjetosInstituicao(user.uid);
       setProjetos(projetosData);
@@ -282,6 +290,7 @@ export default function MeusProjetos({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NavbarDashboard navigation={navigation} instituicao={null} />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>

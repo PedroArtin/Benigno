@@ -1,4 +1,4 @@
-// components/FormularioDoacao.js - CORRIGIDO
+// components/FormularioDoacao.js - INTEGRADO COM SEU SISTEMA EXISTENTE
 import React, { useState } from 'react';
 import {
   View,
@@ -9,18 +9,26 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../components/Global';
-import { salvarDoacao } from '../services/doacoesService';
+import { salvarDoacao, validarCEP, formatarCEP } from '../services/doacoesService';
 import { incrementarDoacoes } from '../authService';
+import { salvarAvaliacao } from '../services/avaliacoesService';
 import { auth } from '../firebase/firebaseconfig';
+import { buscarPerfilUsuario } from '../services/userService';
 
 export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
-  const [tipoEntrega, setTipoEntrega] = useState('entrega'); // 'entrega' ou 'coleta'
+  const [tipoEntrega, setTipoEntrega] = useState('entrega');
   const [itens, setItens] = useState([{ categoria: '', quantidade: '', descricao: '' }]);
   const [observacoes, setObservacoes] = useState('');
+  const [cep, setCep] = useState(''); // 🆕 NOVO
   const [loading, setLoading] = useState(false);
+  const [modalAvaliacao, setModalAvaliacao] = useState(false);
+  const [estrelasSelecionadas, setEstrelasSelecionadas] = useState(0);
+  const [comentario, setComentario] = useState('');
+  const [doacaoId, setDoacaoId] = useState(null);
 
   const categorias = [
     { value: 'alimentos', label: 'Alimentos' },
@@ -48,7 +56,6 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
   };
 
   const validarFormulario = () => {
-    // Verificar se há pelo menos 1 item válido
     const itensValidos = itens.filter(
       (item) => item.categoria && item.quantidade
     );
@@ -58,12 +65,19 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
       return false;
     }
 
+    // 🆕 NOVO: Validar CEP se for coleta
+    if (tipoEntrega === 'coleta') {
+      if (!cep || !validarCEP(cep)) {
+        Alert.alert('Atenção', 'Informe um CEP válido para coleta (formato: 00000-000)');
+        return false;
+      }
+    }
+
     return true;
   };
 
   const handleSubmit = async () => {
     console.log('🟢 handleSubmit INICIADO');
-    console.log('🟢 projeto recebido:', projeto);
     
     if (!projeto) {
       console.error('❌ Projeto está undefined no handleSubmit!');
@@ -82,14 +96,22 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
     try {
       setLoading(true);
 
-      // Filtrar itens válidos
+      // Buscar nome do doador
+      const perfilDoador = await buscarPerfilUsuario(user.uid);
+      const nomeDoador = perfilDoador?.nome || user.email || 'Anônimo';
+
       const itensValidos = itens.filter(
         (item) => item.categoria && item.quantidade
       );
 
-      // Preparar dados da doação
+      // 🔄 INTEGRADO: Usa os status do seu sistema
+      // 'entrega' → 'pendente' (instituição confirma recebimento)
+      // 'coleta' → 'pendente_busca' (instituição confirma que vai buscar)
+      const status = tipoEntrega === 'entrega' ? 'pendente' : 'pendente_busca';
+
       const dadosDoacao = {
         doadorId: user.uid,
+        doadorNome: nomeDoador, // 🆕 NOVO
         instituicaoId: projeto.instituicaoId,
         projetoId: projeto.id,
         projetoTitulo: projeto.titulo,
@@ -100,41 +122,52 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
           descricao: item.descricao || '',
         })),
         observacoes: observacoes.trim(),
-        status: tipoEntrega === 'entrega' ? 'aguardando_confirmacao' : 'pendente',
+        status: status,
       };
 
-      console.log('📤 Dados da doação preparados:');
-      console.log('  - doadorId:', dadosDoacao.doadorId);
-      console.log('  - instituicaoId:', dadosDoacao.instituicaoId);
-      console.log('  - projetoId:', dadosDoacao.projetoId);
-      console.log('  - status:', dadosDoacao.status);
+      // 🆕 NOVO: Adicionar CEP se for coleta
+      if (tipoEntrega === 'coleta') {
+        dadosDoacao.cep = cep.replace(/\D/g, '');
+      }
+
+      console.log('📤 Dados da doação preparados:', dadosDoacao);
 
       const resultado = await salvarDoacao(dadosDoacao);
 
       if (resultado.success) {
-        // 🎯 INCREMENTAR PONTOS DO USUÁRIO
+        const doacaoId = resultado.id;
+        
+        // Incrementar pontos do usuário
         try {
           await incrementarDoacoes(user.uid);
           console.log('✅ Pontos adicionados: +10 pontos!');
         } catch (error) {
           console.error('⚠️ Erro ao adicionar pontos:', error);
-          // Não falha a doação se os pontos não forem adicionados
         }
 
-        Alert.alert(
-          'Sucesso! 🎉',
-          tipoEntrega === 'entrega'
-            ? 'Sua doação foi registrada! Leve os itens até a instituição para confirmação.'
-            : 'Sua doação foi registrada! A instituição entrará em contato para agendar a coleta.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (onSuccess) onSuccess();
+        // 🔄 INTEGRADO: Se for entrega direta, pode avaliar agora
+        // Se for coleta, aguarda confirmação da ONG
+        if (tipoEntrega === 'entrega') {
+          setDoacaoId(doacaoId);
+          setModalAvaliacao(true);
+        } else {
+          Alert.alert(
+            'Doação Registrada! 📦',
+            'Sua doação foi registrada. A instituição irá confirmar a coleta em breve e você receberá uma notificação.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  if (onSuccess) onSuccess();
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        }
+
+        if (onSuccess) {
+          try { onSuccess(); } catch (e) { console.warn('onSuccess callback falhou', e); }
+        }
       } else {
         Alert.alert('Erro', 'Não foi possível registrar a doação. Tente novamente.');
       }
@@ -146,8 +179,139 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
     }
   };
 
+  const handleSalvarAvaliacao = async () => {
+    if (estrelasSelecionadas === 0) {
+      Alert.alert('Avaliação', 'Por favor, selecione uma classificação');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('Erro', 'Você precisa estar logado para avaliar a instituição');
+        setLoading(false);
+        return;
+      }
+
+      // 🔄 INTEGRADO: salvarAvaliacao agora atualiza AMBAS as médias
+      // (instituição E projeto)
+      await salvarAvaliacao({
+        doacaoId: doacaoId,
+        doadorId: user.uid,
+        instituicaoId: projeto.instituicaoId,
+        projetoId: projeto.id,
+        estrelas: estrelasSelecionadas,
+        comentario: comentario.trim(),
+      });
+
+      setModalAvaliacao(false);
+      Alert.alert(
+        'Sucesso! 🎉',
+        'Sua doação foi registrada e sua avaliação foi salva!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setEstrelasSelecionadas(0);
+              setComentario('');
+              if (onSuccess) onSuccess();
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Erro ao salvar avaliação:', error);
+      Alert.alert('Erro', 'Não foi possível salvar sua avaliação');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <>
+      {/* Modal de Avaliação */}
+      <Modal
+        visible={modalAvaliacao}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalAvaliacao(false)}
+      >
+        <View style={modalStyles.modalOverlay}>
+          <View style={modalStyles.modalContent}>
+            <View style={modalStyles.modalHeader}>
+              <Text style={modalStyles.modalTitle}>Avalie a Instituição</Text>
+              <TouchableOpacity onPress={() => setModalAvaliacao(false)}>
+                <Ionicons name="close" size={28} color={cores.verdeEscuro} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={modalStyles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={modalStyles.avaliacaoContainer}>
+                <Text style={modalStyles.avaliacaoLabel}>Como foi sua experiência?</Text>
+                
+                <View style={modalStyles.estrelasContainer}>
+                  {[1, 2, 3, 4, 5].map((estrela) => (
+                    <TouchableOpacity
+                      key={estrela}
+                      onPress={() => setEstrelasSelecionadas(estrela)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={estrela <= estrelasSelecionadas ? 'star' : 'star-outline'}
+                        size={46}
+                        color={estrela <= estrelasSelecionadas ? '#F9A825' : '#E0E0E0'}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={modalStyles.estrelaTexto}>
+                  {estrelasSelecionadas === 0
+                    ? 'Selecione uma classificação'
+                    : `${estrelasSelecionadas} estrela${estrelasSelecionadas !== 1 ? 's' : ''}`}
+                </Text>
+
+                <Text style={modalStyles.comentarioLabel}>Deixe um comentário (opcional)</Text>
+                <TextInput
+                  style={modalStyles.comentarioInput}
+                  placeholder="Conte-nos sua experiência..."
+                  placeholderTextColor="#AAA"
+                  value={comentario}
+                  onChangeText={setComentario}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={modalStyles.modalFooter}>
+              <TouchableOpacity
+                style={modalStyles.btnCancelar}
+                onPress={() => {
+                  setModalAvaliacao(false);
+                  if (onSuccess) onSuccess();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={modalStyles.btnCancelarText}>Pular</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[modalStyles.btnSalvar, loading && modalStyles.btnDisabled]}
+                onPress={handleSalvarAvaliacao}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={modalStyles.btnSalvarText}>
+                  {loading ? 'Salvando...' : 'Enviar Avaliação'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Tipo de Entrega */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Como deseja doar?</Text>
@@ -209,9 +373,31 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* 🆕 NOVO: Campo CEP para Coleta */}
+        {tipoEntrega === 'coleta' && (
+          <View style={styles.cepContainer}>
+            <View style={styles.cepHeader}>
+              <Ionicons name="location" size={24} color={cores.verdeEscuro} />
+              <Text style={styles.cepTitle}>Endereço para coleta</Text>
+            </View>
+            <Text style={styles.inputLabel}>CEP *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="00000-000"
+              keyboardType="numeric"
+              maxLength={9}
+              value={cep}
+              onChangeText={(text) => setCep(formatarCEP(text))}
+            />
+            <Text style={styles.cepInfo}>
+              📍 A instituição usará este CEP para localizar sua residência
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Itens */}
+      {/* Itens - código existente continua igual... */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>O que você vai doar?</Text>
         
@@ -226,7 +412,6 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
               )}
             </View>
 
-            {/* Categoria */}
             <Text style={styles.inputLabel}>Categoria *</Text>
             <View style={styles.categoriaGrid}>
               {categorias.map((cat) => (
@@ -250,7 +435,6 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
               ))}
             </View>
 
-            {/* Quantidade */}
             <Text style={styles.inputLabel}>Quantidade *</Text>
             <TextInput
               style={styles.input}
@@ -260,7 +444,6 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
               onChangeText={(text) => atualizarItem(index, 'quantidade', text)}
             />
 
-            {/* Descrição */}
             <Text style={styles.inputLabel}>Descrição (opcional)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -320,27 +503,16 @@ export default function FormularioDoacao({ projeto, onSuccess, onCancel }) {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </>
   );
 }
 
+// Styles continuam os mesmos do seu código existente...
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 25,
-  },
-  sectionTitle: {
-    ...fontes.montserratBold,
-    fontSize: 16,
-    color: cores.verdeEscuro,
-    marginBottom: 15,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  container: { flex: 1 },
+  section: { paddingHorizontal: 20, marginBottom: 25 },
+  sectionTitle: { ...fontes.montserratBold, fontSize: 16, color: cores.verdeEscuro, marginBottom: 15 },
+  optionsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   optionCard: {
     flex: 1,
     backgroundColor: cores.brancoTexto,
@@ -350,38 +522,30 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E0E0E0',
   },
-  optionCardActive: {
-    borderColor: cores.verdeEscuro,
-    backgroundColor: cores.verdeClaro,
-  },
+  optionCardActive: { borderColor: cores.verdeEscuro, backgroundColor: cores.verdeClaro },
   optionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 60, height: 60, borderRadius: 30,
     backgroundColor: cores.verdeClaro,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 10,
   },
-  optionIconActive: {
-    backgroundColor: cores.verdeEscuro,
+  optionIconActive: { backgroundColor: cores.verdeEscuro },
+  optionTitle: { ...fontes.montserratBold, fontSize: 13, marginBottom: 4, textAlign: 'center' },
+  optionTitleActive: { color: cores.verdeEscuro },
+  optionDesc: { ...fontes.montserrat, fontSize: 11, color: '#666', textAlign: 'center', lineHeight: 16 },
+  
+  // 🆕 NOVOS ESTILOS: Container do CEP
+  cepContainer: {
+    backgroundColor: cores.brancoTexto,
+    borderRadius: 15,
+    padding: 20,
+    marginTop: 15,
+    borderWidth: 2,
+    borderColor: cores.verdeEscuro,
   },
-  optionTitle: {
-    ...fontes.montserratBold,
-    fontSize: 13,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  optionTitleActive: {
-    color: cores.verdeEscuro,
-  },
-  optionDesc: {
-    ...fontes.montserrat,
-    fontSize: 11,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
+  cepHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  cepTitle: { ...fontes.montserratBold, fontSize: 15, color: cores.verdeEscuro, marginLeft: 10 },
+  cepInfo: { ...fontes.montserrat, fontSize: 12, color: '#666', marginTop: 8 },
+  
   itemCard: {
     backgroundColor: cores.brancoTexto,
     borderRadius: 15,
@@ -393,23 +557,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  itemNumber: {
-    ...fontes.montserratBold,
-    fontSize: 14,
-    color: cores.verdeEscuro,
-  },
-  inputLabel: {
-    ...fontes.montserratMedium,
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 8,
-  },
+  itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  itemNumber: { ...fontes.montserratBold, fontSize: 14, color: cores.verdeEscuro },
+  inputLabel: { ...fontes.montserratMedium, fontSize: 13, color: '#666', marginBottom: 8 },
   input: {
     ...fontes.montserrat,
     backgroundColor: '#F5F5F5',
@@ -420,16 +570,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  categoriaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 15,
-  },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  categoriaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
   categoriaChip: {
     paddingHorizontal: 15,
     paddingVertical: 8,
@@ -438,18 +580,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
-  categoriaChipActive: {
-    backgroundColor: cores.verdeEscuro,
-    borderColor: cores.verdeEscuro,
-  },
-  categoriaChipText: {
-    ...fontes.montserratMedium,
-    fontSize: 12,
-    color: '#666',
-  },
-  categoriaChipTextActive: {
-    color: '#fff',
-  },
+  categoriaChipActive: { backgroundColor: cores.verdeEscuro, borderColor: cores.verdeEscuro },
+  categoriaChipText: { ...fontes.montserratMedium, fontSize: 12, color: '#666' },
+  categoriaChipTextActive: { color: '#fff' },
   addItemBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,28 +592,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  addItemText: {
-    ...fontes.montserratBold,
-    fontSize: 14,
-    color: cores.verdeEscuro,
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    ...fontes.montserratBold,
-    fontSize: 14,
-    color: '#666',
-  },
+  addItemText: { ...fontes.montserratBold, fontSize: 14, color: cores.verdeEscuro },
+  buttonsContainer: { flexDirection: 'row', paddingHorizontal: 20, gap: 12 },
+  cancelBtn: { flex: 1, backgroundColor: '#F5F5F5', paddingVertical: 15, borderRadius: 12, alignItems: 'center' },
+  cancelBtnText: { ...fontes.montserratBold, fontSize: 14, color: '#666' },
   submitBtn: {
     flex: 2,
     backgroundColor: cores.verdeEscuro,
@@ -491,12 +606,81 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  submitBtnDisabled: {
-    opacity: 0.6,
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnText: { ...fontes.montserratBold, fontSize: 14, color: '#fff' },
+});
+
+const modalStyles = StyleSheet.create({
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: {
+    backgroundColor: cores.brancoTexto,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    paddingBottom: 20,
   },
-  submitBtnText: {
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: { ...fontes.merriweatherBold, fontSize: 20, color: cores.verdeEscuro },
+  modalBody: { paddingHorizontal: 20, paddingVertical: 24 },
+  avaliacaoContainer: { alignItems: 'center' },
+  avaliacaoLabel: { ...fontes.merriweatherBold, fontSize: 18, color: '#333', marginBottom: 24 },
+  estrelasContainer: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 16 },
+  estrelaTexto: { ...fontes.montserrat, fontSize: 14, color: '#999', marginBottom: 24 },
+  comentarioLabel: {
     ...fontes.montserratBold,
     fontSize: 14,
-    color: '#fff',
+    color: '#333',
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
+  comentarioInput: {
+    ...fontes.montserrat,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    textAlignVertical: 'top',
+    minHeight: 100,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  btnCancelar: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: cores.laranjaEscuro,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnCancelarText: { ...fontes.montserratBold, fontSize: 14, color: cores.laranjaEscuro },
+  btnSalvar: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: cores.verdeEscuro,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  btnSalvarText: { ...fontes.montserratBold, fontSize: 14, color: '#fff' },
+  btnDisabled: { opacity: 0.7 },
 });

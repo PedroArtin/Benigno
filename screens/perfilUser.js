@@ -20,6 +20,7 @@ import {
   criarPerfilUsuario,
   buscarEstatisticas 
 } from '../services/userService';
+import { obterClassificacao } from '../services/avaliacoesService';
 
 export default function Perfil({ navigation }) {
   const [userData, setUserData] = useState(null);
@@ -30,6 +31,7 @@ export default function Perfil({ navigation }) {
   });
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
+  const [classificacao, setClassificacao] = useState(null);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -55,6 +57,9 @@ export default function Perfil({ navigation }) {
       
       if (!user) {
         console.error('❌ Nenhum usuário autenticado');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver seu perfil', [
+          { text: 'OK', onPress: () => navigation.replace('Login') },
+        ]);
         setErro('Usuário não autenticado');
         setLoading(false);
         return;
@@ -111,6 +116,9 @@ export default function Perfil({ navigation }) {
           favoritos: estatisticas.favoritos || 0,
           pontos: estatisticas.pontos || 0,
         });
+        // Calcular classificação do usuário (se desejar mostrar)
+        const pontosUser = estatisticas.pontos || 0;
+        setClassificacao(obterClassificacao(pontosUser));
       } catch (statsError) {
         console.warn('⚠️ Erro ao buscar estatísticas:', statsError.message);
         // Manter valores padrão (0)
@@ -245,6 +253,11 @@ export default function Perfil({ navigation }) {
             />
             <Text style={styles.statNumber}>{stats.pontos}</Text>
             <Text style={styles.statLabel}>Pontos</Text>
+            {classificacao && (
+              <View style={[styles.rankBadge, { backgroundColor: classificacao.cor + '22' }]}>
+                <Text style={[styles.rankText, { color: classificacao.cor }]}>{classificacao.nome}</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -538,6 +551,17 @@ const styles = StyleSheet.create({
     ...fontes.montserrat,
     fontSize: 12,
     color: '#666',
+  },
+  rankBadge: {
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  rankText: {
+    ...fontes.montserratBold,
+    fontSize: 12,
   },
   debugButton: {
     flexDirection: 'row',

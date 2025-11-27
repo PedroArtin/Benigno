@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
+import NavbarDashboard from '../../components/navbarDashboard';
 import { auth } from '../../firebase/firebaseconfig';
 import * as projetosService from '../../services/projetosService';
 
@@ -27,7 +28,14 @@ export default function HistoricoAtividades({ navigation }) {
   const carregarHistorico = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado em HistoricoAtividades instituição');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver o histórico', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setLoading(false);
+        return;
+      }
 
       const projetos = await projetosService.buscarProjetosInstituicao(user.uid);
       const doacoes = await projetosService.buscarDoacoesInstituicao(user.uid);
@@ -134,6 +142,7 @@ export default function HistoricoAtividades({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NavbarDashboard navigation={navigation} instituicao={null} />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>

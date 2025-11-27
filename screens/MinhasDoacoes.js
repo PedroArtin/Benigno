@@ -68,6 +68,12 @@ export default function MinhasDoacoes({ navigation }) {
           onPress: async () => {
             try {
               const user = auth.currentUser;
+              if (!user) {
+                console.warn('Usuário não autenticado ao confirmar coleta');
+                Alert.alert('Erro', 'Você precisa estar logado para confirmar a coleta');
+                return;
+              }
+
               const resultado = await doacoesService.confirmarColetaPeloUsuario(
                 doacaoId,
                 user.uid

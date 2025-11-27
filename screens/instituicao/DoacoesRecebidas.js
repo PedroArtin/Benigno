@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontes, cores } from '../../components/Global';
+import NavbarDashboard from '../../components/navbarDashboard';
 import { auth } from '../../firebase/firebaseconfig';
 import * as doacoesService from '../../services/doacoesService';
 
@@ -37,7 +38,10 @@ export default function DoacoesRecebidas({ navigation }) {
       setRefreshing(true);
       const user = auth.currentUser;
       if (!user) {
-        Alert.alert('Erro', 'Você precisa estar logado');
+        console.warn('Usuário não autenticado em DoacoesRecebidas');
+        Alert.alert('Sessão expirada', 'Faça login novamente para ver as doações', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
         return;
       }
 
@@ -236,6 +240,7 @@ export default function DoacoesRecebidas({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NavbarDashboard navigation={navigation} instituicao={null} />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>

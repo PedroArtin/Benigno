@@ -210,13 +210,22 @@ export const atualizarPerfil = async (userId, dadosAtualizacao) => {
  */
 export const buscarEstatisticas = async (userId) => {
   try {
-    // Contar doações
-    const qDoacoes = query(
-      collection(db, 'doacoes'),
-      where('doadorId', '==', userId)
-    );
-    const snapshotDoacoes = await getDocs(qDoacoes);
-    const totalDoacoes = snapshotDoacoes.size;
+    // Contar doações - tentamos diferentes nomes de campo para compatibilidade
+    const possiveisCampos = ['doadorId', 'doadorUID', 'doador', 'usuarioId', 'userId'];
+    const encontrados = new Set();
+
+    for (const campo of possiveisCampos) {
+      try {
+        const q = query(collection(db, 'doacoes'), where(campo, '==', userId));
+        const snap = await getDocs(q);
+        snap.forEach((doc) => encontrados.add(doc.id));
+      } catch (e) {
+        // Se a query falhar por algum motivo (campo inexistente) apenas continue
+        console.debug('buscarEstatisticas: query falhou para campo', campo, e.message);
+      }
+    }
+
+    const totalDoacoes = encontrados.size;
     
     // Contar favoritos
     const qFavoritos = query(

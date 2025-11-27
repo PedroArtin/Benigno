@@ -16,13 +16,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TextInputMask } from 'react-native-masked-text';
 import { fontes, cores } from '../components/Global';
+import NavbarDashboard from '../components/navbarDashboard';
 import { auth, db } from '../firebase/firebaseconfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { obterClassificacao } from '../services/avaliacoesService';
 
 export default function PerfilInstituicao({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [instituicao, setInstituicao] = useState(null);
+  const [classificacao, setClassificacao] = useState(null);
 
   // Dados da Instituição
   const [nome, setNome] = useState('');
@@ -57,6 +61,10 @@ export default function PerfilInstituicao({ navigation }) {
 
       if (instDoc.exists()) {
         const data = instDoc.data();
+        setInstituicao(data);
+        // Calcular classificação com base em pontos
+        const pontos = data.pontos || data.pontuacao || 0;
+        setClassificacao(obterClassificacao(pontos));
         setNome(data.nome || '');
         setCnpj(data.cnpj || '');
         setEmail(data.email || user.email);
@@ -92,6 +100,14 @@ export default function PerfilInstituicao({ navigation }) {
     try {
       setSaving(true);
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao salvar perfil da instituição');
+        Alert.alert('Sessão expirada', 'Faça login novamente para salvar o perfil', [
+          { text: 'OK', onPress: () => navigation.replace('LoginInstituicao') },
+        ]);
+        setSaving(false);
+        return;
+      }
 
       const dadosAtualizados = {
         nome: nome.trim(),
@@ -147,6 +163,7 @@ export default function PerfilInstituicao({ navigation }) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <NavbarDashboard navigation={navigation} instituicao={instituicao} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={cores.verdeEscuro} />
           <Text style={styles.loadingText}>Carregando perfil...</Text>
@@ -157,30 +174,29 @@ export default function PerfilInstituicao({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NavbarDashboard navigation={navigation} instituicao={instituicao} />
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={cores.verdeEscuro} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Perfil da Instituição</Text>
-          <TouchableOpacity
-            onPress={() => setEditMode(!editMode)}
-            disabled={saving}
-          >
-            <Ionicons
-              name={editMode ? 'close' : 'create'}
-              size={24}
-              color={editMode ? cores.laranjaEscuro : cores.verdeEscuro}
-            />
-          </TouchableOpacity>
-        </View>
-
+        {/* Conteúdo do Perfil */}
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
+            {/* Header com Editar */}
+            <View style={styles.editHeader}>
+              <Text style={styles.headerTitle}>Perfil da Instituição</Text>
+              <TouchableOpacity
+                onPress={() => setEditMode(!editMode)}
+                disabled={saving}
+              >
+                <Ionicons
+                  name={editMode ? 'close' : 'create'}
+                  size={24}
+                  color={editMode ? cores.laranjaEscuro : cores.verdeEscuro}
+                />
+              </TouchableOpacity>
+            </View>
             {/* Avatar */}
             <View style={styles.avatarSection}>
               <View style={styles.avatarContainer}>
@@ -188,6 +204,11 @@ export default function PerfilInstituicao({ navigation }) {
               </View>
               <Text style={styles.avatarName}>{nome || 'Instituição'}</Text>
               <Text style={styles.avatarEmail}>{email}</Text>
+              {classificacao && (
+                <View style={[styles.rankBadge, { backgroundColor: classificacao.cor + '22' }]}>
+                  <Text style={[styles.rankText, { color: classificacao.cor }]}>{classificacao.nome}</Text>
+                </View>
+              )}
             </View>
 
             {/* Dados da Instituição */}
@@ -403,23 +424,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: '#666',
   },
-  header: {
+  content: {
+    paddingHorizontal: 20,
+  },
+  editHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: cores.brancoTexto,
-  },
-  headerTitle: {
-    ...fontes.merriweatherBold,
-    fontSize: 18,
-    color: cores.verdeEscuro,
-  },
-  content: {
-    paddingHorizontal: 20,
+    marginBottom: 10,
   },
   avatarSection: {
     alignItems: 'center',
@@ -444,6 +457,17 @@ const styles = StyleSheet.create({
     ...fontes.montserrat,
     fontSize: 14,
     color: '#666',
+  },
+  rankBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  rankText: {
+    ...fontes.montserratBold,
+    fontSize: 12,
   },
   section: {
     marginBottom: 25,

@@ -52,7 +52,10 @@ export default function CriarProjeto({ navigation }) {
   const carregarDadosInstituicao = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.warn('Usuário não autenticado ao carregar instituição em CriarProjeto');
+        return;
+      }
 
       const instRef = doc(db, 'instituicoes', user.uid);
       const instDoc = await getDoc(instRef);
@@ -106,6 +109,12 @@ export default function CriarProjeto({ navigation }) {
     try {
       setLoading(true);
       const user = auth.currentUser;
+      if (!user) {
+        console.warn('Usuário não autenticado ao criar projeto');
+        Alert.alert('Erro', 'Você precisa estar logado para criar um projeto');
+        setLoading(false);
+        return;
+      }
 
       const projetoData = {
         instituicaoId: user.uid,

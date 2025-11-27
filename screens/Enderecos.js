@@ -50,10 +50,21 @@ export default function Enderecos({ navigation }) {
   const carregarEnderecos = async () => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        const dados = await buscarEnderecos(user.uid);
-        setEnderecos(dados);
+      if (!user) {
+        console.warn('Usuário não autenticado ao carregar endereços');
+        Alert.alert(
+          'Sessão expirada',
+          'Faça login novamente para gerenciar seus endereços',
+          [
+            { text: 'OK', onPress: () => navigation.replace('Login') },
+          ]
+        );
+        setEnderecos([]);
+        return;
       }
+
+      const dados = await buscarEnderecos(user.uid);
+      setEnderecos(dados);
     } catch (error) {
       console.error('Erro ao carregar endereços:', error);
       Alert.alert('Erro', 'Não foi possível carregar os endereços');
@@ -99,6 +110,14 @@ export default function Enderecos({ navigation }) {
     setSalvando(true);
     try {
       const user = auth.currentUser;
+
+      if (!user) {
+        console.warn('Usuário não autenticado ao salvar endereço');
+        Alert.alert('Sessão expirada', 'Faça login novamente para salvar endereços', [
+          { text: 'OK', onPress: () => navigation.replace('Login') },
+        ]);
+        return;
+      }
 
       if (editando) {
         await atualizarEndereco(editando.id, novoEndereco);
