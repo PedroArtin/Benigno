@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, Text } from 'react-native';
-import { fontes, cores } from "../components/Global";
+
+// --- CORREÇÃO AQUI ---
+// Mudamos de ".." para "." porque este arquivo está na raiz
+import { fontes, cores } from "./components/Global"; 
+// ---------------------
+
 import { yAxisSides } from 'gifted-charts-core';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 
@@ -62,7 +67,7 @@ export default function Estatisticas() {
           backgroundColor={cores.brancoTexto}
           barWidth={30}
           barBorderRadius={3}
-          frontColor="#FFA500"  // Essa é a cor padrão, mas vamos deixar que cada barra use a cor própria
+          frontColor="#FFA500"
           data={animatedData}
           yAxisThickness={0}
           xAxisThickness={0}
@@ -75,7 +80,7 @@ export default function Estatisticas() {
           noOfSections={4}
           initialSpacing={2}
           isAnimated
-          barColor={({ index }) => finalData[index].frontColor} // define cor individual da barra
+          barColor={({ index }) => finalData[index].frontColor} 
         />
       </View>
 

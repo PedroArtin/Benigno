@@ -1,4 +1,8 @@
-import { fontes, cores } from "./Global";
+// --- CORREÇÃO AQUI ---
+// Mudamos de "./Global" para "./components/Global"
+import { fontes, cores } from "./components/Global"; 
+// ---------------------
+
 import { FontAwesome } from '@expo/vector-icons';
 import { View, Text, Image, TouchableOpacity, SafeAreaView, StyleSheet} from 'react-native';
 
@@ -8,24 +12,25 @@ export default function BottomNavbar() {
   return (
     <SafeAreaView style={style.container}>
         <View style={style.icones}>
-        <FontAwesome name="home" size={25} color={cores.laranjaEscuro}></FontAwesome>
-        <Text>Home</Text>
+            {/* O uso de cores.laranjaEscuro agora vai funcionar */}
+            <FontAwesome name="home" size={25} color={cores.laranjaEscuro}></FontAwesome>
+            <Text style={{fontFamily: 'Montserrat_400Regular'}}>Home</Text>
         </View>
         <View style={style.icones}>
-        <FontAwesome name="user" size={25} color={cores.laranjaEscuro}></FontAwesome>
-        <Text>Estatísticas</Text>
+            <FontAwesome name="bar-chart" size={25} color={cores.laranjaEscuro}></FontAwesome>
+            <Text style={{fontFamily: 'Montserrat_400Regular'}}>Estatísticas</Text>
         </View>
         <View style={style.icones}>
-        <FontAwesome name="heart" size={25} color={cores.laranjaEscuro}></FontAwesome>
-        <Text>Doar</Text>
+            <FontAwesome name="heart" size={25} color={cores.laranjaEscuro}></FontAwesome>
+            <Text style={{fontFamily: 'Montserrat_400Regular'}}>Doar</Text>
         </View>
         <View style={style.icones}>
-        <FontAwesome name="user" size={25} color={cores.laranjaEscuro}></FontAwesome>
-        <Text>Favoritos</Text>
+            <FontAwesome name="star" size={25} color={cores.laranjaEscuro}></FontAwesome>
+            <Text style={{fontFamily: 'Montserrat_400Regular'}}>Favoritos</Text>
         </View>
         <View style={style.icones}>
-        <FontAwesome name="user" size={25} color={cores.laranjaEscuro}></FontAwesome>
-        <Text>Perfil</Text>
+            <FontAwesome name="user" size={25} color={cores.laranjaEscuro}></FontAwesome>
+            <Text style={{fontFamily: 'Montserrat_400Regular'}}>Perfil</Text>
         </View>
     </SafeAreaView>
   )
@@ -40,12 +45,16 @@ const style = StyleSheet.create({
         justifyContent: "space-around",
         alignItems: "center",
         flexDirection: "row",
-        backgroundColor: "#f00",
+        backgroundColor: "#FFFFFF", // Mudei de vermelho (#f00) para branco para ficar visualmente melhor, ou use cores.fundoBranco
         width: "100%",
-        height: 100,
-
+        height: 90, // Ajustei levemente a altura
+        paddingBottom: 10, // Para não colar no fundo em Iphones novos
+        borderTopWidth: 1,
+        borderTopColor: "#eee"
     },
     icones:{
         alignItems: "center",
+        justifyContent: "center",
+        gap: 4
     }
 })
