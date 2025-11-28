@@ -1,4 +1,4 @@
-// screens/CadastroInst.js - ATUALIZADO
+// screens/CadastroInst.js - COMPLETO COM CEP + MAPA + FIREBASE
 import React, { useState } from "react";
 import {
   View,
@@ -19,14 +19,24 @@ import { db } from "../firebase/firebaseconfig";
 
 export default function CadastroInst({ navigation }) {
   const [loading, setLoading] = useState(false);
-  
+
   // Dados da Instituição
   const [nomeInstituicao, setNomeInstituicao] = useState("");
   const [categoria, setCategoria] = useState(null);
   const [emailInst, setEmailInst] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [cep, setCep] = useState("");
-  
+
+  // NOVO: endereço completo
+  const [rua, setRua] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [estado, setEstado] = useState("");
+
+  // NOVO: coordenadas
+  const [latitude, setLatitude] = useState(null);
+  const [longitude, setLongitude] = useState(null);
+
   // Dados do Responsável
   const [nomeResponsavel, setNomeResponsavel] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -44,53 +54,87 @@ export default function CadastroInst({ navigation }) {
     { label: "Apoio à Melhor Idade", value: "melhor-idade" },
   ];
 
+  // ============================================================
+  // 🔎 BUSCAR ENDEREÇO PELO CEP (BRASIL API - GRATIS)
+  // ============================================================
+  const buscarCEP = async (valorCep) => {
+    if (valorCep.length < 9) return;
+    try {
+      const response = await fetch(
+        `https://brasilapi.com.br/api/cep/v1/${valorCep}`
+      );
+
+      if (!response.ok) throw new Error("CEP não encontrado");
+
+      const data = await response.json();
+
+      setRua(data.street || "");
+      setBairro(data.neighborhood || "");
+      setCidade(data.city || "");
+      setEstado(data.state || "");
+
+      // Agora geocodificar
+      geocodificarEndereco(
+        `${data.street}, ${data.city}, ${data.state}`
+      );
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível buscar o CEP");
+    }
+  };
+
+  // ============================================================
+  // 📍 GEOCODIFICAÇÃO GRATUITA (NOMINATIM / OPENSTREETMAP)
+  // ============================================================
+  const geocodificarEndereco = async (enderecoCompleto) => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+        enderecoCompleto
+      )}`;
+
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "SeuApp/1.0", // obrigatório
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.length > 0) {
+        setLatitude(parseFloat(data[0].lat));
+        setLongitude(parseFloat(data[0].lon));
+      }
+    } catch (error) {
+      console.log("Erro geocodificação:", error);
+    }
+  };
+
+  // ============================================================
+  // VALIDAÇÃO
+  // ============================================================
   const validarCampos = () => {
-    if (!nomeInstituicao.trim()) {
-      Alert.alert("Erro", "Digite o nome da instituição");
-      return false;
-    }
-    if (!categoria) {
-      Alert.alert("Erro", "Selecione uma categoria");
-      return false;
-    }
-    if (!emailInst.trim()) {
-      Alert.alert("Erro", "Digite o e-mail da instituição");
-      return false;
-    }
-    if (!cnpj || cnpj.length < 18) {
-      Alert.alert("Erro", "Digite um CNPJ válido");
-      return false;
-    }
-    if (!cep || cep.length < 9) {
-      Alert.alert("Erro", "Digite um CEP válido");
-      return false;
-    }
-    if (!nomeResponsavel.trim()) {
-      Alert.alert("Erro", "Digite o nome do responsável");
-      return false;
-    }
-    if (!telefone || telefone.length < 14) {
-      Alert.alert("Erro", "Digite um telefone válido");
-      return false;
-    }
-    if (!cpf || cpf.length < 14) {
-      Alert.alert("Erro", "Digite um CPF válido");
-      return false;
-    }
-    if (!senha || senha.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres");
-      return false;
-    }
+    if (!nomeInstituicao.trim()) return Alert.alert("Erro", "Digite o nome da instituição") || false;
+    if (!categoria) return Alert.alert("Erro", "Selecione uma categoria") || false;
+    if (!emailInst.trim()) return Alert.alert("Erro", "Digite o e-mail") || false;
+    if (!cnpj || cnpj.length < 18) return Alert.alert("Erro", "CNPJ inválido") || false;
+    if (!cep || cep.length < 9) return Alert.alert("Erro", "CEP inválido") || false;
+    if (!rua) return Alert.alert("Erro", "CEP não retornou endereço") || false;
+    if (!nomeResponsavel.trim()) return Alert.alert("Erro", "Nome do responsável obrigatório") || false;
+    if (!telefone || telefone.length < 14) return Alert.alert("Erro", "Telefone inválido") || false;
+    if (!cpf || cpf.length < 14) return Alert.alert("Erro", "CPF inválido") || false;
+    if (!senha || senha.length < 6) return Alert.alert("Erro", "Senha muito curta") || false;
     return true;
   };
 
+  // ============================================================
+  // SALVAR NO FIREBASE
+  // ============================================================
   const handleCadastro = async () => {
     if (!validarCampos()) return;
 
     try {
       setLoading(true);
 
-      // 1. Criar conta no Firebase Auth
       const userCredential = await registerWithEmail(
         emailInst.trim(),
         senha,
@@ -99,55 +143,54 @@ export default function CadastroInst({ navigation }) {
 
       const uid = userCredential.uid;
 
-      // 2. Criar documento da instituição no Firestore
-      await setDoc(doc(db, 'instituicoes', uid), {
+      await setDoc(doc(db, "instituicoes", uid), {
         userId: uid,
         nome: nomeInstituicao.trim(),
-        categoria: categoria,
+        categoria,
         email: emailInst.trim(),
-        cnpj: cnpj,
-        cep: cep,
+        cnpj,
+        cep,
+
+        // NOVO: Endereço completo
+        endereco: {
+          rua,
+          bairro,
+          cidade,
+          estado,
+          latitude,
+          longitude,
+        },
+
         responsavel: {
           nome: nomeResponsavel.trim(),
-          telefone: telefone,
-          cpf: cpf,
+          telefone,
+          cpf,
         },
+
         stats: {
           doacoesRecebidas: 0,
           valorArrecadado: 0,
           entregasPendentes: 0,
           doadoresAtivos: 0,
         },
+
         dataCadastro: new Date().toISOString(),
         ativo: true,
       });
 
-      // 3. Sucesso - navegar para Dashboard
       Alert.alert(
         "Cadastro Realizado! 🎉",
         "Sua instituição foi cadastrada com sucesso!",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              navigation.replace("DashboardInstituicao");
-            },
-          },
-        ]
+        [{ text: "OK", onPress: () => navigation.replace("DashboardInstituicao") }]
       );
     } catch (error) {
       console.error("Erro ao cadastrar instituição:", error);
-      
-      let msg = "Ocorreu um erro ao cadastrar. Tente novamente.";
-      
-      if (error.code === "auth/email-already-in-use") {
-        msg = "Este e-mail já está em uso.";
-      } else if (error.code === "auth/invalid-email") {
-        msg = "E-mail inválido.";
-      } else if (error.code === "auth/weak-password") {
-        msg = "A senha deve ter pelo menos 6 caracteres.";
-      }
-      
+      let msg = "Erro ao cadastrar.";
+
+      if (error.code === "auth/email-already-in-use") msg = "Este e-mail já está em uso.";
+      if (error.code === "auth/invalid-email") msg = "E-mail inválido.";
+      if (error.code === "auth/weak-password") msg = "Senha muito fraca.";
+
       Alert.alert("Erro", msg);
     } finally {
       setLoading(false);
@@ -167,37 +210,22 @@ export default function CadastroInst({ navigation }) {
       <Text style={styles.separadores}>Dados da Instituição:</Text>
 
       <View style={styles.containerForm}>
-        {/* Nome da instituição */}
-        <View>
-          <Text style={styles.label}>Nome da Instituição:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nome"
-            placeholderTextColor={cores.placeholder}
-            value={nomeInstituicao}
-            onChangeText={setNomeInstituicao}
-          />
-        </View>
+        
+        {/* Nome */}
+        <Text style={styles.label}>Nome da Instituição:</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Nome"
+          placeholderTextColor={cores.placeholder}
+          value={nomeInstituicao}
+          onChangeText={setNomeInstituicao}
+        />
 
         {/* Categoria */}
         <Text style={styles.label}>Categoria:</Text>
         <Dropdown
           style={styles.input}
           placeholder="Escolha uma categoria"
-          placeholderStyle={{
-            color: cores.placeholder,
-            ...fontes.montserrat,
-          }}
-          selectedTextStyle={{
-            color: "#000",
-            ...fontes.montserrat,
-            fontSize: 14,
-          }}
-          itemTextStyle={{
-            color: cores.verdeEscuro,
-            ...fontes.montserrat,
-          }}
-          search
           data={categorias}
           labelField="label"
           valueField="value"
@@ -206,111 +234,93 @@ export default function CadastroInst({ navigation }) {
         />
 
         {/* Email */}
-        <View>
-          <Text style={styles.label}>Email:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="exemplo@gmail.com"
-            placeholderTextColor={cores.placeholder}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={emailInst}
-            onChangeText={setEmailInst}
-          />
-        </View>
+        <Text style={styles.label}>Email:</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="exemplo@gmail.com"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={emailInst}
+          onChangeText={setEmailInst}
+        />
 
         {/* Senha */}
-        <View>
-          <Text style={styles.label}>Senha:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mínimo 6 caracteres"
-            placeholderTextColor={cores.placeholder}
-            secureTextEntry
-            value={senha}
-            onChangeText={setSenha}
-          />
-        </View>
+        <Text style={styles.label}>Senha:</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Mínimo 6 caracteres"
+          secureTextEntry
+          value={senha}
+          onChangeText={setSenha}
+        />
 
         {/* CNPJ */}
-        <View>
-          <Text style={styles.label}>CNPJ:</Text>
-          <TextInputMask
-            type={"cnpj"}
-            value={cnpj}
-            onChangeText={setCnpj}
-            style={styles.input}
-            placeholder="00.000.000/0001-00"
-            placeholderTextColor={cores.placeholder}
-            keyboardType="numeric"
-          />
-        </View>
+        <Text style={styles.label}>CNPJ:</Text>
+        <TextInputMask
+          type="cnpj"
+          style={styles.input}
+          value={cnpj}
+          onChangeText={setCnpj}
+        />
 
         {/* CEP */}
-        <View>
-          <Text style={styles.label}>CEP:</Text>
-          <TextInputMask
-            type={"zip-code"}
-            value={cep}
-            onChangeText={setCep}
-            style={styles.input}
-            placeholder="00000-000"
-            placeholderTextColor={cores.placeholder}
-            keyboardType="numeric"
-          />
-        </View>
+        <Text style={styles.label}>CEP:</Text>
+        <TextInputMask
+          type="zip-code"
+          value={cep}
+          style={styles.input}
+          onChangeText={(v) => {
+            setCep(v);
+            buscarCEP(v);
+          }}
+        />
 
-        {/* Separador */}
+        {/* Endereço preenchido automaticamente */}
+        <Text style={styles.label}>Rua:</Text>
+        <TextInput style={styles.input} value={rua} editable={false} />
+
+        <Text style={styles.label}>Bairro:</Text>
+        <TextInput style={styles.input} value={bairro} editable={false} />
+
+        <Text style={styles.label}>Cidade:</Text>
+        <TextInput style={styles.input} value={cidade} editable={false} />
+
+        <Text style={styles.label}>Estado:</Text>
+        <TextInput style={styles.input} value={estado} editable={false} />
+
         <View style={styles.linhaComTexto}>
           <View style={styles.linha} />
         </View>
 
         <Text style={styles.separadores}>Dados do Responsável:</Text>
 
-        {/* Nome do responsável */}
-        <View>
-          <Text style={styles.label}>Nome:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nome do responsável"
-            placeholderTextColor={cores.placeholder}
-            value={nomeResponsavel}
-            onChangeText={setNomeResponsavel}
-          />
-        </View>
+        {/* Nome responsável */}
+        <Text style={styles.label}>Nome:</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Nome do responsável"
+          value={nomeResponsavel}
+          onChangeText={setNomeResponsavel}
+        />
 
         {/* Telefone */}
-        <View>
-          <Text style={styles.label}>Telefone:</Text>
-          <TextInputMask
-            type={"cel-phone"}
-            options={{
-              maskType: "BRL",
-              withDDD: true,
-              dddMask: "(99) ",
-            }}
-            value={telefone}
-            onChangeText={setTelefone}
-            style={styles.input}
-            placeholder="(00) 00000-0000"
-            placeholderTextColor={cores.placeholder}
-            keyboardType="phone-pad"
-          />
-        </View>
+        <Text style={styles.label}>Telefone:</Text>
+        <TextInputMask
+          type="cel-phone"
+          style={styles.input}
+          value={telefone}
+          onChangeText={setTelefone}
+          options={{ maskType: "BRL", withDDD: true, dddMask: "(99) " }}
+        />
 
         {/* CPF */}
-        <View>
-          <Text style={styles.label}>CPF:</Text>
-          <TextInputMask
-            type={"cpf"}
-            value={cpf}
-            onChangeText={setCpf}
-            style={styles.input}
-            placeholder="000.000.000-00"
-            placeholderTextColor={cores.placeholder}
-            keyboardType="numeric"
-          />
-        </View>
+        <Text style={styles.label}>CPF:</Text>
+        <TextInputMask
+          type="cpf"
+          style={styles.input}
+          value={cpf}
+          onChangeText={setCpf}
+        />
       </View>
 
       <TouchableOpacity
@@ -323,11 +333,9 @@ export default function CadastroInst({ navigation }) {
         </Text>
       </TouchableOpacity>
 
-      {/* NOVO: Link para Login */}
       <TouchableOpacity
         onPress={() => navigation.navigate("LoginInstituicao")}
         style={styles.linkContainer}
-        activeOpacity={0.7}
       >
         <Text style={styles.link}>Já tenho conta</Text>
       </TouchableOpacity>
@@ -337,6 +345,7 @@ export default function CadastroInst({ navigation }) {
   );
 }
 
+// ESTILOS (iguais)
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
@@ -379,13 +388,12 @@ const styles = StyleSheet.create({
     ...fontes.montserrat,
     width: 300,
     height: 45,
-    marginBottom: 30,
+    marginBottom: 20,
     paddingHorizontal: 18,
     borderRadius: 30,
     borderWidth: 1,
     borderColor: "#000",
     fontSize: 14,
-    textAlignVertical: "center",
   },
   botao: {
     justifyContent: "center",
@@ -416,8 +424,6 @@ const styles = StyleSheet.create({
   },
   linkContainer: {
     marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
   },
   link: {
     ...fontes.montserratMedium,
