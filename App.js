@@ -9,9 +9,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/firebaseconfig'; 
 
 import StackRoutes from './routes/StackRoutes'; 
-// --- CORREÇÃO AQUI ---
-import TabRoutes from './routes/TabRoutes'; // Agora chamamos as rotas, não só a barra
-// ---------------------
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,16 +40,17 @@ export default function App() {
 
   if (!appIsReady || !fontsLoaded) return null;
 
+  // Se tem usuário, começa na 'Home' (que abre as Tabs). Se não, 'Introducao'.
+  const rotaInicial = user ? "Home" : "Introducao";
+
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <NavigationContainer>
-        {user ? (
-          // --- CORREÇÃO AQUI ---
-          <TabRoutes /> // Carrega o sistema de abas completo (Home + Barra)
-          // ---------------------
-        ) : (
-          <StackRoutes />
-        )}
+        {/* A Key força o React a recriar a navegação quando loga/desloga */}
+        <StackRoutes 
+          initialRoute={rotaInicial} 
+          key={user ? "user-logado" : "user-deslogado"} 
+        />
       </NavigationContainer>
     </View>
   );

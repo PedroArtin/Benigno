@@ -1,4 +1,3 @@
-// routes/StackRoutes.js - VERSÃO FINAL COM TODAS AS ROTAS
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
@@ -50,14 +49,16 @@ import CriarProjeto from '../screens/CriarProjeto';
 
 const Stack = createStackNavigator();
 
-export default function StackRoutes() {
+// RECEBENDO A PROPRIEDADE initialRoute
+export default function StackRoutes({ initialRoute }) {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
       }}
-      initialRouteName="Introducao"
+      // USA A ROTA QUE O APP MANDAR, SE NÃO TIVER USA INTRODUCAO
+      initialRouteName={initialRoute || "Introducao"}
     >
       {/* ===== ONBOARDING ===== */}
       <Stack.Screen name="Introducao" component={Introducao} />
